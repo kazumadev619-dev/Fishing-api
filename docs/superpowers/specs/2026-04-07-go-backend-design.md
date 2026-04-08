@@ -379,7 +379,7 @@ type MapsClient interface {
 
 | 用途 | 説明 |
 |------|------|
-| アプリ公開 | `fishing-app.yourdomain.com` → k3s Traefik |
+| アプリ公開 | `fishing.kazuma-lab.com` → k3s Traefik |
 | CI/CDアクセス | GitHub Actions → k3s API Server（Cloudflare Access経由） |
 | SSL/TLS | Cloudflareが自動管理 |
 
@@ -441,9 +441,9 @@ k8s Ingressで `/api/*` をGoバックエンドに転送するため、フロン
 
 ---
 
-## 未決定事項
+## 確定事項（旧・未決定事項）
 
-- DBリポジトリ: `Fishing-database`（確定）
-- Raspberry Piのモデル（ARM64確認要）
-- Cloudflareドメイン名
-- Redis・PostgreSQLのk3sへの移行タイミング（既存Dockerから移行）
+- DBリポジトリ: `Fishing-database`
+- ハードウェア: Raspberry Pi 5 / Ubuntu Server 24.04.4 64bit（ARM64）
+- ドメイン: `kazuma-lab.com`（アプリ: `fishing.kazuma-lab.com`、k3s API: `k3s-api.kazuma-lab.com`）
+- Redis・PostgreSQLのk3sへの移行タイミング: Phase 4実施時に既存Dockerから移行

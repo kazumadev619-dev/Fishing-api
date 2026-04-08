@@ -324,7 +324,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
   rules:
-    - host: fishing-app.yourdomain.com
+    - host: fishing.kazuma-lab.com
       http:
         paths:
           - path: /api
@@ -423,7 +423,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
 spec:
   rules:
-    - host: fishing-app.yourdomain.com
+    - host: fishing.kazuma-lab.com
       http:
         paths:
           - path: /
@@ -1022,8 +1022,8 @@ sudo cat /etc/rancher/k3s/k3s.yaml
 2. 「Create a tunnel」→ cloudflaredを選択
 3. トークンをコピー（GitHub SecretのCLOUDFLARE_TUNNEL_TOKENに設定）
 4. Public Hostname を設定:
-   - fishing-app.yourdomain.com → http://traefik.fishing.svc.cluster.local:80
-   - k3s-api.yourdomain.com → https://localhost:6443 （CI/CD用）
+   - fishing.kazuma-lab.com → http://traefik.fishing.svc.cluster.local:80
+   - k3s-api.kazuma-lab.com → https://localhost:6443 （CI/CD用）
 ```
 
 - [ ] **Step 4: Raspberry Pi上でcloudflaredをk3sにデプロイする**
@@ -1050,7 +1050,7 @@ Expected: `cloudflared` Podが `Running` 状態
 GitHubリポジトリ → Settings → Secrets and variables → Actions で以下を登録：
 
 CLOUDFLARE_TUNNEL_TOKEN  = Cloudflare AccessトークンCLOUDFLARE TOKEN
-K3S_API_URL              = k3s-api.yourdomain.com
+K3S_API_URL              = k3s-api.kazuma-lab.com
 K3S_KUBECONFIG           = base64エンコードしたkubeconfig
 DATABASE_URL             = 本番DBのURL
 REDIS_URL                = 本番RedisのURL
@@ -1059,7 +1059,7 @@ JWT_REFRESH_SECRET       = 32文字以上のランダム文字列
 OPENWEATHER_API_KEY      = OpenWeatherMap APIキー
 GOOGLE_MAPS_API_KEY      = Google Maps APIキー
 RESEND_API_KEY           = Resend APIキー
-EMAIL_FROM               = noreply@yourdomain.com
+EMAIL_FROM               = noreply@kazuma-lab.com
 ```
 
 - [ ] **Step 6: mainにpushしてデプロイをトリガーする**
@@ -1079,7 +1079,7 @@ Expected:
 - [ ] **Step 7: 本番動作確認**
 
 ```bash
-curl https://fishing-app.yourdomain.com/health
+curl https://fishing.kazuma-lab.com/health
 ```
 
 Expected:
@@ -1088,7 +1088,7 @@ Expected:
 ```
 
 ```bash
-curl "https://fishing-app.yourdomain.com/api/weather?lat=35.6895&lon=139.6917&type=current"
+curl "https://fishing.kazuma-lab.com/api/weather?lat=35.6895&lon=139.6917&type=current"
 ```
 
 Expected: 天気データのJSONレスポンス
@@ -1109,6 +1109,6 @@ git push origin main
 - [ ] GitHub Actions CIが全テストPASS
 - [ ] mainへのpushでGHCRにARM64イメージがpushされる
 - [ ] k3s上で全Podが `Running` 状態
-- [ ] `https://fishing-app.yourdomain.com/health` が `{"status":"ok"}` を返す
-- [ ] `https://fishing-app.yourdomain.com/api/weather` が天気データを返す
+- [ ] `https://fishing.kazuma-lab.com/health` が `{"status":"ok"}` を返す
+- [ ] `https://fishing.kazuma-lab.com/api/weather` が天気データを返す
 - [ ] DBスキーマ変更時にsync-schema.ymlが自動でPRを作成する
