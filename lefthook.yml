@@ -1,0 +1,13 @@
+# lefthook.yml
+pre-commit:
+  parallel: false
+  commands:
+    gofumpt:
+      glob: "*.go"
+      run: gofumpt -w {staged_files}
+      stage_fixed: true
+
+    golangci-lint:
+      glob: "*.go"
+      run: golangci-lint run --fix --fast {staged_files}
+      stage_fixed: true
