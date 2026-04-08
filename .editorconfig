@@ -1,0 +1,33 @@
+# .editorconfig
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+charset = utf-8
+
+# Go はタブインデント（gofmt 標準）
+[*.go]
+indent_style = tab
+indent_size = 4
+
+# YAML・JSON はスペース2つ
+[*.{yaml,yml,json}]
+indent_style = space
+indent_size = 2
+
+# Markdown はトレイリングスペース保持（改行に使う場合がある）
+[*.md]
+trim_trailing_whitespace = false
+indent_style = space
+indent_size = 2
+
+# Dockerfile はスペース4つ
+[Dockerfile]
+indent_style = space
+indent_size = 4
+
+# Makefile はタブ必須
+[Makefile]
+indent_style = tab
