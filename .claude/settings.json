@@ -1,0 +1,29 @@
+{
+  "env": {
+    "Max_THINKING_TOKENS": "10000"
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(cat | jq -r \".file_path // .path // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"\\.go$\"; then gofumpt -w \"$FILE\" 2>/dev/null || true; golangci-lint run --fast --fix \"$FILE\" 2>/dev/null || true; fi'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'FILE=$(cat | jq -r \".file_path // .path // empty\" 2>/dev/null); if echo \"$FILE\" | grep -qE \"(\\.golangci\\.ya?ml|cspell\\.json|\\.markdownlint\\.json)$\"; then echo \"BLOCKED: リンター設定ファイルは直接編集禁止。コードを修正してリンターエラーを解消してください。\"; exit 2; fi'"
+          }
+        ]
+      }
+    ]
+  }
+}
