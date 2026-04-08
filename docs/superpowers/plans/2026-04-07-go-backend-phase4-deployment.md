@@ -837,10 +837,10 @@ jobs:
 
 - [ ] **Step 2: DBリポジトリ側のdispatch設定（メモ）**
 
-DBリポジトリ（例: `fishing-db`）のGitHub Actionsに以下を追加する：
+DBリポジトリ（例: `Fishing-database`）のGitHub Actionsに以下を追加する：
 
 ```yaml
-# fishing-dbリポジトリの .github/workflows/notify-api.yml（参考）
+# Fishing-databaseリポジトリの .github/workflows/notify-api.yml（参考）
 - name: Notify fishing-api of schema change
   run: |
     SCHEMA_BASE64=$(base64 -w0 prisma/migrations/combined_schema.sql)

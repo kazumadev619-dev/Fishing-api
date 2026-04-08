@@ -443,7 +443,7 @@ k8s Ingressで `/api/*` をGoバックエンドに転送するため、フロン
 
 ## 未決定事項
 
-- DBリポジトリのリポジトリ名（`fishing-db`?）
+- DBリポジトリ: `Fishing-database`（確定）
 - Raspberry Piのモデル（ARM64確認要）
 - Cloudflareドメイン名
 - Redis・PostgreSQLのk3sへの移行タイミング（既存Dockerから移行）
