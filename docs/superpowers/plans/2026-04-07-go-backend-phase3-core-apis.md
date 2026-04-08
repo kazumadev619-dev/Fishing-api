@@ -6,7 +6,7 @@
 
 **Architecture:** 各機能ごとに `infrastructure/external`（外部APIクライアント）→ `usecase`（Redisキャッシュ付きビジネスロジック）→ `interface/handler`（HTTPハンドラー）の流れ。スコア算出は外部APIを呼ばず天気・潮汐データから純粋計算。
 
-**Tech Stack:** Go 1.24, Gin, go-redis/v9, encoding/json, net/http
+**Tech Stack:** Go 1.26, Gin, go-redis/v9, encoding/json, net/http
 
 **前提条件:** Phase 1・2完了済み（認証・DB・Redis・ルーター動作確認済み）
 

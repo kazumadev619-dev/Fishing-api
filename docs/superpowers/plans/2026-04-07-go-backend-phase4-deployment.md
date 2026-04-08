@@ -859,7 +859,7 @@ git commit -m "feat: DBスキーマ自動同期ワークフロー追加"
 
 ## 前提条件
 
-- Go 1.24+
+- Go 1.26+
 - Docker + Docker Compose
 - sqlc: `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`
 - golangci-lint: `brew install golangci-lint`

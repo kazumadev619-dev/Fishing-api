@@ -16,7 +16,7 @@ FishingConditionsAppのバックエンドをNext.js API Routesから独立した
 
 | 項目 | 技術 |
 |------|------|
-| 言語 | Go 1.24+ |
+| 言語 | Go 1.26+ |
 | フレームワーク | Gin |
 | DB アクセス | sqlc + PostgreSQL |
 | キャッシュ | Redis |

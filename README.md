@@ -7,8 +7,8 @@
 
 | 項目 | 内容 |
 |------|------|
-| 言語 | Go 1.24 |
-| フレームワーク | Gin v1.10 |
+| 言語 | Go 1.26 |
+| フレームワーク | Gin v1.12 |
 | DB | PostgreSQL 17（Docker on Raspberry Pi） |
 | キャッシュ | Redis 7（Docker on Raspberry Pi） |
 | デプロイ先 | Raspberry Pi 5 + k3s + Cloudflare Tunnel |
@@ -74,7 +74,7 @@ k8s/               Kubernetes マニフェスト
 ## ローカル開発
 
 ```bash
-# 前提: Go 1.24+, Docker, sqlc, golangci-lint
+# 前提: Go 1.26+, Docker, sqlc, golangci-lint
 
 # 環境変数設定
 cp .env.example .env

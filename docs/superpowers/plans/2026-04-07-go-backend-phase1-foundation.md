@@ -6,7 +6,7 @@
 
 **Architecture:** クリーンアーキテクチャ。`domain` 層は外側を知らない。`infrastructure` が `domain` のインターフェースを実装し、`main.go` でDIする。
 
-**Tech Stack:** Go 1.24, Gin v1.10, sqlc v2, pgx/v5, go-redis/v9, testify
+**Tech Stack:** Go 1.26, Gin v1.10, sqlc v2, pgx/v5, go-redis/v9, testify
 
 ---
 

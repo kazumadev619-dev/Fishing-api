@@ -53,7 +53,7 @@ OpenWeatherMap APIを呼び出し、Redisに30分キャッシュする実装。
 
 ### 前提条件
 
-- Go 1.24+
+- Go 1.26+
 - Docker + Docker Compose
 - make
 - sqlc: `go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest`
