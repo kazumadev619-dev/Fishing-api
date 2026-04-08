@@ -8,7 +8,7 @@
 
 **Tech Stack:** Docker buildx, k3s, Traefik, Cloudflare Tunnel, GitHub Actions
 
-**前提条件:** Phase 1〜3完了済み。Raspberry PiにはUbuntu 24.04 LTS + k3sインストール済み。Cloudflareアカウント・ドメイン設定済み。
+**前提条件:** Phase 1〜3完了済み。Raspberry PiにはUbuntu 24.04 LTS + k3sインストール済み。Cloudflareアカウント・ドメイン設定済み。PostgreSQL・RedisはRaspberry Pi上のDocker Compose（k3s外）で運用する。
 
 ---
 
@@ -32,6 +32,7 @@
 | 新規作成 | `.github/workflows/ci.yml` | Lint・テスト・ビルドCI |
 | 新規作成 | `.github/workflows/deploy.yml` | GHCR push → k3sデプロイ |
 | 新規作成 | `.github/workflows/sync-schema.yml` | DBリポジトリからschema.sql同期 |
+| 新規作成 | `docker-compose.db.yml` | Raspberry Pi上でのDB（PostgreSQL + Redis）構成 |
 | 新規作成 | `docs/development.md` | ローカル開発セットアップ手順 |
 
 ---
@@ -576,29 +577,15 @@ jobs:
           version: latest
 ```
 
-- [ ] **Step 2: golangci-lint設定を追加する**
+- [ ] **Step 2: .golangci.yml が存在することを確認する**
 
-```yaml
-# .golangci.yml
-linters:
-  enable:
-    - errcheck
-    - gosimple
-    - govet
-    - ineffassign
-    - staticcheck
-    - unused
-
-linters-settings:
-  govet:
-    enable-all: true
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
+```bash
+ls .golangci.yml
 ```
+
+Expected: `.golangci.yml` が存在する（Phase 0 Task 5 で作成済み）
+
+存在しない場合は Phase 0 Task 5 を先に実施すること。CI では `.golangci.yml` の full 設定（gofumpt, gocritic, bodyclose 等を含む）が使用される。
 
 - [ ] **Step 3: コミット**
 
@@ -991,7 +978,170 @@ git commit -m "docs: 開発セットアップガイド追加"
 
 ---
 
-## Task 9: k3sへの初回デプロイ
+## Task 9: Raspberry Pi上のDB構成（Docker Compose、k3s外）
+
+PostgreSQL・Redisはk3sのPod管理外で動かすのだ。Podはエフェメラルなため、DBをk8s StatefulSetで管理するのはベストプラクティスに反する。
+
+**Files:**
+- Create: `docker-compose.db.yml`
+
+- [ ] **Step 1: Raspberry Pi上にDockerをインストールする**
+
+```bash
+# Raspberry Pi上で実行（Ubuntu 24.04）
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
+# 再ログイン後に確認
+docker --version
+```
+
+Expected: `Docker version 27.x.x` 等が表示される
+
+- [ ] **Step 2: docker-compose.db.yml を作成する**
+
+このファイルはGitリポジトリで管理し、Raspberry Piにデプロイして使う。
+
+```yaml
+# docker-compose.db.yml
+# Raspberry Pi上でk3s外として動かすDB専用Compose
+# 起動: docker compose -f docker-compose.db.yml up -d
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: fishing-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: fishing
+      POSTGRES_USER: fishing
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fishing"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: fishing-redis
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+- [ ] **Step 3: Raspberry Piに .env.db を作成する（Gitには入れない）**
+
+```bash
+# Raspberry Pi上で実行
+cat > /opt/fishing-db/.env.db << 'EOF'
+POSTGRES_PASSWORD=<強力なパスワードを設定>
+REDIS_PASSWORD=<強力なパスワードを設定>
+EOF
+chmod 600 /opt/fishing-db/.env.db
+```
+
+- [ ] **Step 4: docker-compose.db.yml をRaspberry Piにコピーしてコンテナを起動する**
+
+```bash
+# ローカルマシンからコピー（sshでPiにコピー）
+scp docker-compose.db.yml pi@<pi-ip>:/opt/fishing-db/
+
+# Raspberry Pi上で起動
+cd /opt/fishing-db
+docker compose -f docker-compose.db.yml --env-file .env.db up -d
+
+# 確認
+docker compose -f docker-compose.db.yml ps
+```
+
+Expected: `fishing-postgres` と `fishing-redis` が `healthy` 状態
+
+- [ ] **Step 5: systemdでDocker Composeを自動起動設定する（Pi再起動時にも自動復旧）**
+
+```bash
+# Raspberry Pi上で実行
+sudo tee /etc/systemd/system/fishing-db.service << 'EOF'
+[Unit]
+Description=Fishing App Database Services
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/fishing-db
+ExecStart=/usr/bin/docker compose -f docker-compose.db.yml --env-file .env.db up -d
+ExecStop=/usr/bin/docker compose -f docker-compose.db.yml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable fishing-db
+sudo systemctl start fishing-db
+
+# 確認
+sudo systemctl status fishing-db
+```
+
+Expected: `Active: active (exited)` が表示される
+
+- [ ] **Step 6: Raspberry PiのプライベートIPを確認してk3s Podからの接続URLを設定する**
+
+```bash
+# Raspberry Pi上で実行
+ip addr show | grep "inet " | grep -v 127.0.0.1
+```
+
+確認したIPアドレス（例: `192.168.1.100`）を使って、GitHub Secretsに登録するURLを構成する：
+
+```
+DATABASE_URL = postgres://fishing:<POSTGRES_PASSWORD>@192.168.1.100:5432/fishing
+REDIS_URL    = redis://:<REDIS_PASSWORD>@192.168.1.100:6379
+```
+
+**注意:** k3s Podはホストネットワーク経由でこのIPにアクセスできる。`localhost` は不可（Pod内から見ると自分自身を指すため）。
+
+- [ ] **Step 7: DBスキーマを適用する（初回のみ）**
+
+```bash
+# Phase 1で作成した db/schema.sql をRaspberry Piにコピーして適用する
+scp db/schema.sql pi@<pi-ip>:/tmp/schema.sql
+
+# Raspberry Pi上で実行
+docker exec -i fishing-postgres psql -U fishing -d fishing < /tmp/schema.sql
+```
+
+Expected: スキーマが正常に適用される
+
+- [ ] **Step 8: コミット**
+
+```bash
+git add docker-compose.db.yml
+git commit -m "feat: Raspberry Pi用DB専用Docker Compose追加（k3s外運用）"
+```
+
+---
+
+## Task 10: k3sへの初回デプロイ
 
 ここからはRaspberry Pi上での作業なのだ。
 
@@ -1108,6 +1258,8 @@ git push origin main
 - [ ] `docker buildx build --platform linux/arm64` でビルドが通る
 - [ ] GitHub Actions CIが全テストPASS
 - [ ] mainへのpushでGHCRにARM64イメージがpushされる
+- [ ] Raspberry Pi上で `fishing-postgres` と `fishing-redis` が `healthy` 状態
+- [ ] `sudo systemctl status fishing-db` が `active (exited)` 状態（Pi再起動後も自動復旧）
 - [ ] k3s上で全Podが `Running` 状態
 - [ ] `https://fishing.kazuma-lab.com/health` が `{"status":"ok"}` を返す
 - [ ] `https://fishing.kazuma-lab.com/api/weather` が天気データを返す

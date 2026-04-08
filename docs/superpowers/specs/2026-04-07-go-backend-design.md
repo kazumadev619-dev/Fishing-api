@@ -446,4 +446,4 @@ k8s Ingressで `/api/*` をGoバックエンドに転送するため、フロン
 - DBリポジトリ: `Fishing-database`
 - ハードウェア: Raspberry Pi 5 / Ubuntu Server 24.04.4 64bit（ARM64）
 - ドメイン: `kazuma-lab.com`（アプリ: `fishing.kazuma-lab.com`、k3s API: `k3s-api.kazuma-lab.com`）
-- Redis・PostgreSQLのk3sへの移行タイミング: Phase 4実施時に既存Dockerから移行
+- Redis・PostgreSQLのデプロイ方式: Raspberry Pi上のDocker Compose（k3s外）で常時運用。k8sベストプラクティス（PodはEphemeral）に従い、DBはStatefulSet管理しない。外部マネージドサービスも使用しない。systemdでPi再起動時の自動復旧を設定する。
