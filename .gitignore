@@ -1,32 +1,58 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
+# .gitignore
+
+# -----------------------------------------------
+# Go
+# -----------------------------------------------
+bin/
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-
-# Test binary, built with `go test -c`
 *.test
-
-# Code coverage profiles and other test artifacts
 *.out
-coverage.*
-*.coverprofile
-profile.cov
+vendor/
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
-
-# Go workspace file
-go.work
-go.work.sum
-
-# env file
+# -----------------------------------------------
+# 環境変数・シークレット
+# -----------------------------------------------
 .env
+.env.*
+!.env.example
 
-# Editor/IDE
-# .idea/
-# .vscode/
+# -----------------------------------------------
+# k8s シークレット実値ファイル（テンプレートはGit管理対象）
+# -----------------------------------------------
+k8s/config/*.yaml.local
+
+# -----------------------------------------------
+# Raspberry Pi DB 設定（本番シークレット）
+# -----------------------------------------------
+.env.db
+
+# -----------------------------------------------
+# ビルド成果物
+# -----------------------------------------------
+dist/
+build/
+
+# -----------------------------------------------
+# IDE / エディタ
+# -----------------------------------------------
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# -----------------------------------------------
+# テスト・カバレッジ
+# -----------------------------------------------
+coverage.out
+coverage.html
+
+# -----------------------------------------------
+# kubeconfig ローカルコピー
+# -----------------------------------------------
+kubeconfig.yaml
+kubeconfig*.yaml
