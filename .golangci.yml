@@ -1,0 +1,42 @@
+# .golangci.yml
+version: "2"
+
+linters:
+  # デフォルト有効linterはそのままにする
+  default: standard
+
+  enable:
+    # --- fast subset（PostToolUse・pre-commitで使用） ---
+    - errcheck        # エラー無視の検出
+    - govet           # go vet 相当
+    - staticcheck     # 高度な静的解析
+    - unused          # 未使用コード
+    - gosimple        # 簡略化できるコードの検出
+    - ineffassign     # 無効な代入の検出
+    # --- full（CI のみで実行） ---
+    - gofumpt         # gofumpt フォーマットチェック
+    - goimports       # import 順序チェック
+    - gocritic        # 追加静的解析
+    - noctx           # context なし HTTP リクエスト検出
+    - bodyclose       # response body の close 漏れ検出
+    - nilerr          # nil エラー返却の検出
+    - exhaustive      # switch 文の網羅性チェック
+    - wrapcheck       # エラーラップ漏れ検出（外部パッケージ呼び出し時）
+
+linters-settings:
+  gofumpt:
+    module-path: github.com/kazumadev619-dev/fishing-api
+  exhaustive:
+    default-signifies-exhaustive: true
+
+issues:
+  exclude-rules:
+    # テストコードは errcheck・wrapcheck を緩和
+    - path: _test\.go
+      linters:
+        - errcheck
+        - wrapcheck
+    # 生成コードは除外
+    - path: db/generated/
+      linters:
+        - all
