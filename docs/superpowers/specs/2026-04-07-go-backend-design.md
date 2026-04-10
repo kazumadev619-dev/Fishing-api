@@ -18,8 +18,9 @@ FishingConditionsAppのバックエンドをNext.js API Routesから独立した
 |------|------|
 | 言語 | Go 1.26+ |
 | フレームワーク | Gin |
-| DB アクセス | sqlc + PostgreSQL |
-| キャッシュ | Redis |
+| DB | **Neon**（マネージド PostgreSQL）|
+| DB アクセス | sqlc + pgx/v5 |
+| キャッシュ | Redis（Raspberry Pi Docker） |
 | 認証 | JWT（golang-jwt/jwt）+ Google OAuth（golang.org/x/oauth2） |
 | コンテナ | Docker（linux/arm64） |
 | オーケストレーション | k3s（Raspberry Pi） |
@@ -370,9 +371,13 @@ type MapsClient interface {
     ├── cloudflared Pod     # Tunnel エージェント
     ├── Traefik Ingress      # k3sデフォルトIngress
     ├── fishing-api Pod      # Goバックエンド（ARM64）
-    ├── frontend Pod         # Next.js（ARM64）
-    ├── postgres Pod
-    └── redis Pod
+    └── frontend Pod         # Next.js（ARM64）
+
+[Raspberry Pi Docker]（k3s外）
+    └── redis                # キャッシュのみ
+
+[Neon Cloud]（外部マネージドDB）
+    └── PostgreSQL           # 永続データ（停電・HW障害からデータを保護）
 ```
 
 ### Cloudflare Tunnelの役割
@@ -418,9 +423,45 @@ schema.sql を更新 → sqlc generate → PR自動作成
 | 層 | 手法 | ツール |
 |----|------|--------|
 | usecase | モックリポジトリでユニットテスト | testify/mock |
-| infrastructure/db | Docker上の実PostgreSQLで統合テスト | testcontainers-go |
+| infrastructure/db | testcontainersで実PostgreSQLコンテナを起動して統合テスト | testcontainers-go |
 | infrastructure/external | HTTPモックサーバー | net/http/httptest |
 | interface/handler | ルーター全体の統合テスト | httptest + Gin |
+
+> **Note:** Neon は本番・ステージング用。CI/CD 統合テストは testcontainers-go でローカルコンテナを起動するため、Neon への依存なしにテストできる。
+
+---
+
+## DB 選定理由（Neon 採用）
+
+### 採用サービス
+
+**[Neon](https://neon.tech)** — サーバーレス PostgreSQL（マネージドクラウド）
+
+### 比較検討
+
+| 選択肢 | コスト | 非アクティブ停止 | 管理コスト | 採用 |
+|--------|-------|----------------|-----------|------|
+| Raspberry Pi Docker（自前） | ゼロ | なし | 高（バックアップ・パッチ自己管理） | ✗ |
+| Supabase Free | ゼロ | **7日停止あり** | 低 | ✗ |
+| **Neon Free** | **ゼロ** | **なし** | **低** | **✓** |
+| Supabase Pro | $25/月 | なし | 低 | ✗ |
+
+### Neon を選んだ理由
+
+1. **停電・ハードウェア障害のリスク排除**
+   Raspberry Pi の SD カードはランダム書き込みに弱く、PostgreSQL データが乗った状態で障害が起きると全データ消失のリスクがある。Neon はクラウドで冗長化されているため、Pi の電源が落ちてもデータは安全。
+
+2. **無料でありながら非アクティブ停止がない**
+   Supabase Free は7日間アクセスがないとプロジェクトが停止し、手動で Resume が必要。個人アプリで気づかずにアプリが壊れたままになるリスクがある。Neon Free はこの制限がない。
+
+3. **移行コストがほぼゼロ**
+   Neon は標準 PostgreSQL なので `pgx/v5 + sqlc` の接続文字列を変えるだけ。Go コードの変更は不要。接続文字列に `sslmode=require` を追加するのみ。
+
+4. **自動バックアップ**
+   Neon は7日分の自動バックアップを提供。自前 Docker では設定・運用を自分で行う必要があった。
+
+5. **Redis は引き続き自前**
+   Neon には Redis 相当のサービスがないため、キャッシュ（Redis）は Raspberry Pi Docker で継続。ただしキャッシュはステートレスな揮発データのため、障害時の影響は「キャッシュリセット」のみ。
 
 ---
 
@@ -446,4 +487,5 @@ k8s Ingressで `/api/*` をGoバックエンドに転送するため、フロン
 - DBリポジトリ: `Fishing-database`
 - ハードウェア: Raspberry Pi 5 / Ubuntu Server 24.04.4 64bit（ARM64）
 - ドメイン: `kazuma-lab.com`（アプリ: `fishing.kazuma-lab.com`、k3s API: `k3s-api.kazuma-lab.com`）
-- Redis・PostgreSQLのデプロイ方式: Raspberry Pi上のDocker Compose（k3s外）で常時運用。k8sベストプラクティス（PodはEphemeral）に従い、DBはStatefulSet管理しない。外部マネージドサービスも使用しない。systemdでPi再起動時の自動復旧を設定する。
+- PostgreSQL: **Neon**（マネージドクラウドDB）を採用。Raspberry Pi の停電・SD カード障害によるデータ消失リスクを排除。無料枠で非アクティブ停止なし・自動バックアップ（7日分）付き。`pgx/v5 + sqlc` はそのまま接続可能（接続文字列に `sslmode=require` を追加するのみ）。
+- Redis: 引き続き Raspberry Pi 上の Docker Compose（k3s外）で運用。キャッシュはステートレスな揮発データのため、Raspberry Pi 障害時の影響は「キャッシュ消去」のみでデータ消失リスクなし。systemd で Pi 再起動時の自動復旧を設定する。

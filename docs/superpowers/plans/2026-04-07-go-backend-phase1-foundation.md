@@ -41,7 +41,7 @@
 | 新規作成 | `internal/interface/handler/health_test.go` | ヘルスチェックテスト |
 | 新規作成 | `internal/interface/router/router.go` | Ginルーター設定 |
 | 新規作成 | `cmd/server/main.go` | エントリーポイント・DI組み立て |
-| 新規作成 | `docker-compose.yml` | ローカル開発用PostgreSQL + Redis |
+| 新規作成 | `docker-compose.yml` | ローカル開発用 Redis（PostgreSQL は Neon を使用） |
 | 新規作成 | `Makefile` | よく使うコマンド集 |
 | 新規作成 | `.env.example` | 環境変数テンプレート |
 
@@ -850,40 +850,28 @@ git commit -m "feat: DBスキーマ・sqlcクエリ・生成コード追加"
 - Create: `internal/infrastructure/db/db.go`
 - Create: `docker-compose.yml`
 
-- [ ] **Step 1: docker-compose.yml を作成する（ローカル開発用）**
+- [ ] **Step 1: docker-compose.yml を作成する（ローカル開発用・Redis のみ）**
+
+> **Note:** PostgreSQL は Neon（マネージドクラウド）を使用するため docker-compose には含めない。
+> ローカル開発時は Neon の接続文字列を `.env` に設定して使う。
 
 ```yaml
 # docker-compose.yml
 version: '3.8'
 services:
-  postgres:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_DB: fishing_dev
-      POSTGRES_USER: fishing
-      POSTGRES_PASSWORD: fishing_password
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./db/schema.sql:/docker-entrypoint-initdb.d/schema.sql
-
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
-
-volumes:
-  postgres_data:
 ```
 
-- [ ] **Step 2: ローカルDBを起動する**
+- [ ] **Step 2: ローカル Redis を起動する**
 
 ```bash
-docker-compose up -d postgres redis
+docker-compose up -d redis
 ```
 
-Expected: PostgreSQLとRedisが起動する
+Expected: Redis が起動する
 
 - [ ] **Step 3: db.go を作成する**
 
@@ -924,7 +912,7 @@ Expected: エラーなし
 
 ```bash
 git add internal/infrastructure/db/ docker-compose.yml
-git commit -m "feat: PostgreSQL接続・ローカル開発環境追加"
+git commit -m "feat: DB接続（Neon）・ローカル開発環境（Redis）追加"
 ```
 
 ---
@@ -1256,7 +1244,9 @@ func main() {
 ```bash
 # .env.example
 PORT=8080
-DATABASE_URL=postgres://fishing:fishing_password@localhost:5432/fishing_dev
+# Neon接続文字列（Neonダッシュボードから取得）
+# 形式: postgres://<user>:<password>@<host>.neon.tech/<dbname>?sslmode=require
+DATABASE_URL=postgres://user:password@ep-xxxx.us-east-2.aws.neon.tech/fishing_dev?sslmode=require
 REDIS_URL=redis://localhost:6379
 
 # JWT（本番では十分に長いランダム文字列を使うこと）
@@ -1303,10 +1293,10 @@ lint:
 sqlc-gen:
 	sqlc generate
 
-docker-up:
-	docker-compose up -d
+redis-up:
+	docker-compose up -d redis
 
-docker-down:
+redis-down:
 	docker-compose down
 
 migrate:
@@ -1323,8 +1313,8 @@ echo "bin/" >> .gitignore
 - [ ] **Step 6: サーバーを起動してヘルスチェックを確認する**
 
 ```bash
-# DBとRedisが起動していることを確認
-docker-compose up -d
+# Redisを起動（DBはNeon接続のため不要）
+make redis-up
 
 # .envから環境変数を読み込んでサーバー起動
 export $(cat .env | xargs) && make run
@@ -1356,4 +1346,4 @@ git commit -m "feat: main.go・Makefile・.env.example追加、Phase 1完了"
 - [ ] `go test ./...` が全テストPASS（DB・Redis接続テストを除く）
 - [ ] `make run` でサーバーが起動する
 - [ ] `curl http://localhost:8080/health` が `{"status":"ok"}` を返す
-- [ ] `docker-compose up -d` でPostgreSQLとRedisが起動する
+- [ ] `make redis-up` で Redis が起動する（PostgreSQL は Neon 接続のため docker-compose 不要）

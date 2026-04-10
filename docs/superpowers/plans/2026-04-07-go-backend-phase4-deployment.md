@@ -8,7 +8,7 @@
 
 **Tech Stack:** Docker buildx, k3s, Traefik, Cloudflare Tunnel, GitHub Actions
 
-**前提条件:** Phase 1〜3完了済み。Raspberry PiにはUbuntu 24.04 LTS + k3sインストール済み。Cloudflareアカウント・ドメイン設定済み。PostgreSQL・RedisはRaspberry Pi上のDocker Compose（k3s外）で運用する。
+**前提条件:** Phase 1〜3完了済み。Raspberry PiにはUbuntu 24.04 LTS + k3sインストール済み。Cloudflareアカウント・ドメイン設定済み。PostgreSQL は Neon（マネージドクラウド）を使用。Redis のみ Raspberry Pi 上の Docker Compose（k3s外）で運用する。
 
 ---
 
@@ -26,13 +26,12 @@
 | 新規作成 | `k8s/frontend/service.yaml` | Next.jsフロントエンドサービス |
 | 新規作成 | `k8s/frontend/ingress.yaml` | `/*` → frontend ルーティング |
 | 新規作成 | `k8s/cloudflared/deployment.yaml` | Cloudflare Tunnelエージェント |
-| 新規作成 | `k8s/config/postgres-secret.yaml` | PostgreSQL接続情報シークレット |
 | 新規作成 | `k8s/config/redis-secret.yaml` | Redis接続情報シークレット |
-| 新規作成 | `k8s/config/fishing-api-secret.yaml` | 環境変数シークレット |
+| 新規作成 | `k8s/config/fishing-api-secret.yaml` | 環境変数シークレット（DATABASE_URL含む） |
 | 新規作成 | `.github/workflows/ci.yml` | Lint・テスト・ビルドCI |
 | 新規作成 | `.github/workflows/deploy.yml` | GHCR push → k3sデプロイ |
 | 新規作成 | `.github/workflows/sync-schema.yml` | DBリポジトリからschema.sql同期 |
-| 新規作成 | `docker-compose.db.yml` | Raspberry Pi上でのDB（PostgreSQL + Redis）構成 |
+| 新規作成 | `docker-compose.db.yml` | Raspberry Pi上での Redis 構成（PostgreSQL は Neon のため不要） |
 | 新規作成 | `docs/development.md` | ローカル開発セットアップ手順 |
 
 ---
@@ -121,8 +120,7 @@ git commit -m "feat: Dockerfile追加（ARM64マルチステージビルド）"
 
 **Files:**
 - Create: `k8s/namespace.yaml`
-- Create: `k8s/config/fishing-api-secret.yaml`
-- Create: `k8s/config/postgres-secret.yaml`
+- Create: `k8s/config/fishing-api-secret.yaml`（DATABASE_URL含む）
 - Create: `k8s/config/redis-secret.yaml`
 
 - [ ] **Step 1: namespace.yaml を作成する**
@@ -137,6 +135,9 @@ metadata:
 
 - [ ] **Step 2: fishing-api-secret.yaml を作成する（値はGitHub Secretsで管理）**
 
+> **Note:** `DATABASE_URL` は Neon の接続文字列（`postgres://...?sslmode=require`）。
+> 別 Secret ファイルを作らず、ここに集約する。
+
 ```yaml
 # k8s/config/fishing-api-secret.yaml
 # NOTE: このファイルはテンプレート。実際の値は kubectl create secret で作成するか、
@@ -148,6 +149,7 @@ metadata:
   namespace: fishing
 type: Opaque
 stringData:
+  DATABASE_URL: "${DATABASE_URL}"
   JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET}"
   JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET}"
   OPENWEATHER_API_KEY: "${OPENWEATHER_API_KEY}"
@@ -156,21 +158,7 @@ stringData:
   EMAIL_FROM: "${EMAIL_FROM}"
 ```
 
-- [ ] **Step 3: postgres-secret.yaml を作成する**
-
-```yaml
-# k8s/config/postgres-secret.yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: postgres-secret
-  namespace: fishing
-type: Opaque
-stringData:
-  DATABASE_URL: "${DATABASE_URL}"
-```
-
-- [ ] **Step 4: redis-secret.yaml を作成する**
+- [ ] **Step 3: redis-secret.yaml を作成する**
 
 ```yaml
 # k8s/config/redis-secret.yaml
@@ -236,7 +224,7 @@ spec:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: postgres-secret
+                  name: fishing-api-secret
                   key: DATABASE_URL
             - name: REDIS_URL
               valueFrom:
@@ -712,7 +700,6 @@ jobs:
           kubectl apply -f k8s/namespace.yaml
           # envsubstでシークレットテンプレートを置換してapply
           envsubst < k8s/config/fishing-api-secret.yaml | kubectl apply -f -
-          envsubst < k8s/config/postgres-secret.yaml | kubectl apply -f -
           envsubst < k8s/config/redis-secret.yaml | kubectl apply -f -
 
       - name: Deploy to k3s
@@ -978,14 +965,15 @@ git commit -m "docs: 開発セットアップガイド追加"
 
 ---
 
-## Task 9: Raspberry Pi上のDB構成（Docker Compose、k3s外）
+## Task 9: Raspberry Pi 上の Redis 構成（Docker Compose、k3s外）
 
-PostgreSQL・Redisはk3sのPod管理外で動かすのだ。Podはエフェメラルなため、DBをk8s StatefulSetで管理するのはベストプラクティスに反する。
+> **Note:** PostgreSQL は Neon（マネージドクラウド）を使用するため、Raspberry Pi での DB 管理は不要。
+> Redis のみ Raspberry Pi の Docker Compose で運用する。キャッシュはステートレスな揮発データのため、Pi 障害時の影響は「キャッシュリセット」のみ。
 
 **Files:**
 - Create: `docker-compose.db.yml`
 
-- [ ] **Step 1: Raspberry Pi上にDockerをインストールする**
+- [ ] **Step 1: Raspberry Pi 上に Docker をインストールする**
 
 ```bash
 # Raspberry Pi上で実行（Ubuntu 24.04）
@@ -997,34 +985,16 @@ docker --version
 
 Expected: `Docker version 27.x.x` 等が表示される
 
-- [ ] **Step 2: docker-compose.db.yml を作成する**
+- [ ] **Step 2: docker-compose.db.yml を作成する（Redis のみ）**
 
 このファイルはGitリポジトリで管理し、Raspberry Piにデプロイして使う。
 
 ```yaml
 # docker-compose.db.yml
-# Raspberry Pi上でk3s外として動かすDB専用Compose
+# Raspberry Pi上でk3s外として動かすRedis専用Compose
 # 起動: docker compose -f docker-compose.db.yml up -d
 
 services:
-  postgres:
-    image: postgres:17-alpine
-    container_name: fishing-postgres
-    restart: always
-    environment:
-      POSTGRES_DB: fishing
-      POSTGRES_USER: fishing
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fishing"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   redis:
     image: redis:7-alpine
     container_name: fishing-redis
@@ -1041,25 +1011,23 @@ services:
       retries: 5
 
 volumes:
-  postgres_data:
   redis_data:
 ```
 
-- [ ] **Step 3: Raspberry Piに .env.db を作成する（Gitには入れない）**
+- [ ] **Step 3: Raspberry Pi に .env.db を作成する（Git には入れない）**
 
 ```bash
 # Raspberry Pi上で実行
 cat > /opt/fishing-db/.env.db << 'EOF'
-POSTGRES_PASSWORD=<強力なパスワードを設定>
 REDIS_PASSWORD=<強力なパスワードを設定>
 EOF
 chmod 600 /opt/fishing-db/.env.db
 ```
 
-- [ ] **Step 4: docker-compose.db.yml をRaspberry Piにコピーしてコンテナを起動する**
+- [ ] **Step 4: docker-compose.db.yml を Raspberry Pi にコピーしてコンテナを起動する**
 
 ```bash
-# ローカルマシンからコピー（sshでPiにコピー）
+# ローカルマシンからコピー
 scp docker-compose.db.yml pi@<pi-ip>:/opt/fishing-db/
 
 # Raspberry Pi上で起動
@@ -1070,15 +1038,15 @@ docker compose -f docker-compose.db.yml --env-file .env.db up -d
 docker compose -f docker-compose.db.yml ps
 ```
 
-Expected: `fishing-postgres` と `fishing-redis` が `healthy` 状態
+Expected: `fishing-redis` が `healthy` 状態
 
-- [ ] **Step 5: systemdでDocker Composeを自動起動設定する（Pi再起動時にも自動復旧）**
+- [ ] **Step 5: systemd で Docker Compose を自動起動設定する（Pi 再起動時にも自動復旧）**
 
 ```bash
 # Raspberry Pi上で実行
-sudo tee /etc/systemd/system/fishing-db.service << 'EOF'
+sudo tee /etc/systemd/system/fishing-cache.service << 'EOF'
 [Unit]
-Description=Fishing App Database Services
+Description=Fishing App Cache Services
 Requires=docker.service
 After=docker.service
 
@@ -1095,48 +1063,36 @@ WantedBy=multi-user.target
 EOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable fishing-db
-sudo systemctl start fishing-db
+sudo systemctl enable fishing-cache
+sudo systemctl start fishing-cache
 
 # 確認
-sudo systemctl status fishing-db
+sudo systemctl status fishing-cache
 ```
 
 Expected: `Active: active (exited)` が表示される
 
-- [ ] **Step 6: Raspberry PiのプライベートIPを確認してk3s Podからの接続URLを設定する**
+- [ ] **Step 6: Raspberry Pi のプライベート IP を確認して k3s Pod からの接続 URL を設定する**
 
 ```bash
 # Raspberry Pi上で実行
 ip addr show | grep "inet " | grep -v 127.0.0.1
 ```
 
-確認したIPアドレス（例: `192.168.1.100`）を使って、GitHub Secretsに登録するURLを構成する：
+確認したIPアドレス（例: `192.168.1.100`）を使って、GitHub Secrets に登録する URL を構成する：
 
 ```
-DATABASE_URL = postgres://fishing:<POSTGRES_PASSWORD>@192.168.1.100:5432/fishing
+DATABASE_URL = <Neonダッシュボードから取得した接続文字列>?sslmode=require
 REDIS_URL    = redis://:<REDIS_PASSWORD>@192.168.1.100:6379
 ```
 
-**注意:** k3s Podはホストネットワーク経由でこのIPにアクセスできる。`localhost` は不可（Pod内から見ると自分自身を指すため）。
+**注意:** k3s Pod はホストネットワーク経由でこの IP にアクセスできる。`localhost` は不可（Pod内から見ると自分自身を指すため）。
 
-- [ ] **Step 7: DBスキーマを適用する（初回のみ）**
-
-```bash
-# Phase 1で作成した db/schema.sql をRaspberry Piにコピーして適用する
-scp db/schema.sql pi@<pi-ip>:/tmp/schema.sql
-
-# Raspberry Pi上で実行
-docker exec -i fishing-postgres psql -U fishing -d fishing < /tmp/schema.sql
-```
-
-Expected: スキーマが正常に適用される
-
-- [ ] **Step 8: コミット**
+- [ ] **Step 7: コミット**
 
 ```bash
 git add docker-compose.db.yml
-git commit -m "feat: Raspberry Pi用DB専用Docker Compose追加（k3s外運用）"
+git commit -m "feat: Raspberry Pi用Redis専用Docker Compose追加（k3s外運用、DBはNeon）"
 ```
 
 ---
