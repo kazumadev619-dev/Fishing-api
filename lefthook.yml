@@ -9,5 +9,5 @@ pre-commit:
 
     golangci-lint:
       glob: "*.go"
-      run: golangci-lint run --fix --fast-only --no-config {staged_files}
+      run: golangci-lint run --fix --fast-only --no-config ./...
       stage_fixed: true
