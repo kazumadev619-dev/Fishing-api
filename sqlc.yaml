@@ -1,0 +1,15 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "db/queries/"
+    schema: "db/schema.sql"
+    gen:
+      go:
+        package: "sqlcgen"
+        out: "db/generated/"
+        emit_interface: true
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"
