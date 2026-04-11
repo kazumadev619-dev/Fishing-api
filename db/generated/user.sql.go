@@ -51,7 +51,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 
 const findUserByEmail = `-- name: FindUserByEmail :one
 
-SELECT id, email, password_hash, name, avatar_url, is_sso_user, email_verified_at, created_at, updated_at FROM users WHERE email = $1 LIMIT 1
+SELECT id, email, password_hash, name, avatar_url, is_sso_user, email_verified_at, created_at, updated_at
+FROM users WHERE email = $1 LIMIT 1
 `
 
 // db/queries/user.sql
@@ -73,7 +74,8 @@ func (q *Queries) FindUserByEmail(ctx context.Context, email string) (User, erro
 }
 
 const findUserByID = `-- name: FindUserByID :one
-SELECT id, email, password_hash, name, avatar_url, is_sso_user, email_verified_at, created_at, updated_at FROM users WHERE id = $1 LIMIT 1
+SELECT id, email, password_hash, name, avatar_url, is_sso_user, email_verified_at, created_at, updated_at
+FROM users WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) FindUserByID(ctx context.Context, id uuid.UUID) (User, error) {

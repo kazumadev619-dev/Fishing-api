@@ -64,7 +64,8 @@ func (q *Queries) DeleteVerificationTokensByEmail(ctx context.Context, email str
 }
 
 const findVerificationToken = `-- name: FindVerificationToken :one
-SELECT id, email, token, expires_at, created_at FROM verification_tokens WHERE token = $1 LIMIT 1
+SELECT id, email, token, expires_at, created_at
+FROM verification_tokens WHERE token = $1 LIMIT 1
 `
 
 func (q *Queries) FindVerificationToken(ctx context.Context, token string) (VerificationToken, error) {

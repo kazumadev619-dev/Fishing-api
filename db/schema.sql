@@ -81,3 +81,10 @@ CREATE TABLE user_settings (
     preferences JSONB,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- インデックス
+CREATE INDEX idx_user_favorites_user_id ON user_favorites(user_id);
+CREATE INDEX idx_locations_port_id ON locations(port_id) WHERE port_id IS NOT NULL;
+CREATE INDEX idx_verification_tokens_email ON verification_tokens(email);
+CREATE INDEX idx_verification_tokens_expires_at ON verification_tokens(expires_at);
+CREATE INDEX idx_identities_user_id ON identities(user_id);
