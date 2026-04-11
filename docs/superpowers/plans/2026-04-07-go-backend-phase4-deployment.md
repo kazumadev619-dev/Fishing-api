@@ -8,7 +8,7 @@
 
 **Tech Stack:** Docker buildx, k3s, Traefik, Cloudflare Tunnel, GitHub Actions
 
-**前提条件:** Phase 1〜3完了済み。Raspberry PiにはUbuntu 24.04 LTS + k3sインストール済み。Cloudflareアカウント・ドメイン設定済み。PostgreSQL は Neon（マネージドクラウド）を使用。Redis のみ Raspberry Pi 上の Docker Compose（k3s外）で運用する。
+**前提条件:** Phase 1〜3完了済み。Raspberry PiにはUbuntu 24.04 LTS + k3sインストール済み。Cloudflareアカウント・ドメイン設定済み。PostgreSQL は Neon（マネージドクラウド）を使用。Redis は k3s Pod として k3s クラスター内で運用する（ClusterIP Service 経由でアクセス）。
 
 ---
 
@@ -26,12 +26,14 @@
 | 新規作成 | `k8s/frontend/service.yaml` | Next.jsフロントエンドサービス |
 | 新規作成 | `k8s/frontend/ingress.yaml` | `/*` → frontend ルーティング |
 | 新規作成 | `k8s/cloudflared/deployment.yaml` | Cloudflare Tunnelエージェント |
+| 新規作成 | `k8s/redis/deployment.yaml` | Redis Pod デプロイメント |
+| 新規作成 | `k8s/redis/service.yaml` | Redis ClusterIP Service |
 | 新規作成 | `k8s/config/redis-secret.yaml` | Redis接続情報シークレット |
 | 新規作成 | `k8s/config/fishing-api-secret.yaml` | 環境変数シークレット（DATABASE_URL含む） |
 | 新規作成 | `.github/workflows/ci.yml` | Lint・テスト・ビルドCI |
 | 新規作成 | `.github/workflows/deploy.yml` | GHCR push → k3sデプロイ |
 | 新規作成 | `.github/workflows/sync-schema.yml` | DBリポジトリからschema.sql同期 |
-| 新規作成 | `docker-compose.db.yml` | Raspberry Pi上での Redis 構成（PostgreSQL は Neon のため不要） |
+| 削除 | `docker-compose.db.yml` | Redis を k3s Pod に移行したため不要（PostgreSQL は Neon のため元々不要） |
 | 新規作成 | `docs/development.md` | ローカル開発セットアップ手順 |
 
 ---

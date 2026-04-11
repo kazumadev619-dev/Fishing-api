@@ -9,8 +9,8 @@
 |------|------|
 | 言語 | Go 1.26 |
 | フレームワーク | Gin v1.12 |
-| DB | PostgreSQL 17（Docker on Raspberry Pi） |
-| キャッシュ | Redis 7（Docker on Raspberry Pi） |
+| DB | PostgreSQL 17（Neon マネージドクラウド） |
+| キャッシュ | Redis 7（k3s Pod + ClusterIP Service） |
 | デプロイ先 | Raspberry Pi 5 + k3s + Cloudflare Tunnel |
 | ドメイン | `fishing.kazuma-lab.com` |
 
@@ -32,6 +32,8 @@
 | DELETE | `/api/favorites/:id` | お気に入り削除 | JWT必要 |
 
 ## アーキテクチャ
+
+![Architecture](docs/FishingApp-Architecture.drawio.png)
 
 クリーンアーキテクチャ（依存は内側のみ）：
 
@@ -67,9 +69,11 @@ k8s/               Kubernetes マニフェスト
 [kubectl] Raspberry Pi k3s ローリングデプロイ
 ```
 
-- **PostgreSQL・Redis**: Raspberry Pi 上で Docker Compose（k3s 外）
+- **PostgreSQL**: Neon（マネージドクラウド）
+- **Redis**: k3s Pod（ClusterIP Service）— キャッシュ用途のみなのでデータ消失時は再取得で対応
 - **アプリ**: k3s Pod
 - **ルーティング**: Traefik Ingress（`/api/*` → Go, `/*` → Next.js）
+- **フロントエンド → バックエンド通信**: ブラウザからは Cloudflare 経由、Next.js SSR からは ClusterIP 直通（`fishing-api-service:8080`）
 
 ## ローカル開発
 

@@ -10,7 +10,7 @@ Go バックエンド for [FishingConditionsApp](https://github.com/kazumadev619
 | フレームワーク | Gin |
 | DB | **Neon**（マネージドサーバーレス PostgreSQL） |
 | DB アクセス | sqlc + pgx/v5（接続文字列に `sslmode=require` 必須） |
-| キャッシュ | Redis（Raspberry Pi Docker、k3s 外） |
+| キャッシュ | Redis（k3s Pod + ClusterIP Service） |
 | 認証 | JWT（15分） + Refresh Token（7日）+ Google OAuth |
 | デプロイ | k3s on Raspberry Pi 5 → Cloudflare Tunnel |
 | CI/CD | GitHub Actions → GHCR（linux/arm64） → kubectl rolling deploy |
@@ -30,7 +30,8 @@ Go バックエンド for [FishingConditionsApp](https://github.com/kazumadev619
 ## 主要設計決定
 
 - **DB は Neon** を採用（Supabase Free は7日不使用で停止するため却下）
-- **Redis は自前** のまま（キャッシュはステートレスなので障害時はキャッシュリセットのみ）
+- **Redis は k3s Pod** で運用（キャッシュはステートレスなので Pod 再起動でデータが消えても DB から再取得するだけ）
+- **フロント→バックエンド通信**：ブラウザは Cloudflare 経由、Next.js SSR は ClusterIP 直通（`fishing-api-service:8080`）
 - **ビッグバン移行**：Next.js API Routes を全廃し Go で再実装。k8s Ingress で `/api/*` を切り替え
 - `db/schema.sql` は `Fishing-database` リポジトリから GitHub Actions で自動同期（手動編集しない）
 

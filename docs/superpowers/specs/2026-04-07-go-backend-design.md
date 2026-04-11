@@ -20,7 +20,7 @@ FishingConditionsAppのバックエンドをNext.js API Routesから独立した
 | フレームワーク | Gin |
 | DB | **Neon**（マネージド PostgreSQL）|
 | DB アクセス | sqlc + pgx/v5 |
-| キャッシュ | Redis（Raspberry Pi Docker） |
+| キャッシュ | Redis（k3s Pod + ClusterIP Service） |
 | 認証 | JWT（golang-jwt/jwt）+ Google OAuth（golang.org/x/oauth2） |
 | コンテナ | Docker（linux/arm64） |
 | オーケストレーション | k3s（Raspberry Pi） |
@@ -368,16 +368,29 @@ type MapsClient interface {
 [Cloudflare Edge] ←──── cloudflared tunnel ────┐
                                                 │
 [Raspberry Pi k3s] ──────────────────────────────
-    ├── cloudflared Pod     # Tunnel エージェント
-    ├── Traefik Ingress      # k3sデフォルトIngress
-    ├── fishing-api Pod      # Goバックエンド（ARM64）
-    └── frontend Pod         # Next.js（ARM64）
-
-[Raspberry Pi Docker]（k3s外）
-    └── redis                # キャッシュのみ
+    ├── cloudflared Pod          # Tunnel エージェント
+    ├── Traefik Ingress           # k3sデフォルトIngress
+    │     ├── /api/* → fishing-api-service (ClusterIP)  ← ブラウザ経由
+    │     └── /*    → frontend-service    (ClusterIP)
+    ├── fishing-api Pod           # Goバックエンド（ARM64）
+    ├── frontend Pod              # Next.js（ARM64）
+    │     └── [SSR] → fishing-api-service:8080 (ClusterIP直通)
+    └── redis Pod                 # キャッシュのみ（ClusterIP Service）
 
 [Neon Cloud]（外部マネージドDB）
-    └── PostgreSQL           # 永続データ（停電・HW障害からデータを保護）
+    └── PostgreSQL                # 永続データ（停電・HW障害からデータを保護）
+```
+
+**フロントエンド → バックエンド通信の2経路：**
+
+| 経路 | 用途 | 経由 |
+|------|------|------|
+| ブラウザ | クライアントサイドfetch | Cloudflare → Traefik → `/api/*` → fishing-api |
+| Next.js SSR | サーバーサイドfetch | ClusterIP直通 `http://fishing-api-service:8080` |
+
+```env
+NEXT_PUBLIC_API_URL=https://fishing.kazuma-lab.com  # ブラウザ用
+INTERNAL_API_URL=http://fishing-api-service:8080     # SSR用（クラスター内部）
 ```
 
 ### Cloudflare Tunnelの役割
@@ -488,4 +501,4 @@ k8s Ingressで `/api/*` をGoバックエンドに転送するため、フロン
 - ハードウェア: Raspberry Pi 5 / Ubuntu Server 24.04.4 64bit（ARM64）
 - ドメイン: `kazuma-lab.com`（アプリ: `fishing.kazuma-lab.com`、k3s API: `k3s-api.kazuma-lab.com`）
 - PostgreSQL: **Neon**（マネージドクラウドDB）を採用。Raspberry Pi の停電・SD カード障害によるデータ消失リスクを排除。無料枠で非アクティブ停止なし・自動バックアップ（7日分）付き。`pgx/v5 + sqlc` はそのまま接続可能（接続文字列に `sslmode=require` を追加するのみ）。
-- Redis: 引き続き Raspberry Pi 上の Docker Compose（k3s外）で運用。キャッシュはステートレスな揮発データのため、Raspberry Pi 障害時の影響は「キャッシュ消去」のみでデータ消失リスクなし。systemd で Pi 再起動時の自動復旧を設定する。
+- Redis: k3s Pod として k3s クラスター内で運用（ClusterIP Service 経由でアクセス）。キャッシュはステートレスな揮発データのため、Pod 再起動でデータが消えても DB から再取得するだけ。Pod なので `kubectl` でライフサイクル管理でき、DNS 名（`redis-service`）で接続できる。永続化（PVC）は不要。
