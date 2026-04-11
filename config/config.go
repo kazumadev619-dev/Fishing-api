@@ -73,14 +73,17 @@ func Load() (*Config, error) {
 }
 
 func (c *Config) validate() error {
-	required := map[string]string{
-		"DATABASE_URL":       c.Database.URL,
-		"JWT_ACCESS_SECRET":  c.JWT.AccessSecret,
-		"JWT_REFRESH_SECRET": c.JWT.RefreshSecret,
+	required := []struct {
+		key string
+		val string
+	}{
+		{"DATABASE_URL", c.Database.URL},
+		{"JWT_ACCESS_SECRET", c.JWT.AccessSecret},
+		{"JWT_REFRESH_SECRET", c.JWT.RefreshSecret},
 	}
-	for key, val := range required {
-		if val == "" {
-			return fmt.Errorf("required environment variable not set: %s", key)
+	for _, r := range required {
+		if r.val == "" {
+			return fmt.Errorf("required environment variable not set: %s", r.key)
 		}
 	}
 	return nil
