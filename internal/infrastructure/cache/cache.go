@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -12,7 +13,7 @@ type CacheClient struct {
 	client *redis.Client
 }
 
-func NewCacheClient(redisURL string) (*CacheClient, error) {
+func NewCacheClient(ctx context.Context, redisURL string) (*CacheClient, error) {
 	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse redis URL: %w", err)
@@ -20,7 +21,7 @@ func NewCacheClient(redisURL string) (*CacheClient, error) {
 
 	client := redis.NewClient(opts)
 
-	if err := client.Ping(context.Background()).Err(); err != nil {
+	if err := client.Ping(ctx).Err(); err != nil {
 		return nil, fmt.Errorf("failed to connect to redis: %w", err)
 	}
 
@@ -30,7 +31,7 @@ func NewCacheClient(redisURL string) (*CacheClient, error) {
 // Get はキャッシュからデータを取得する。キャッシュミスの場合は (nil, nil) を返す。
 func (c *CacheClient) Get(ctx context.Context, key string) ([]byte, error) {
 	val, err := c.client.Get(ctx, key).Bytes()
-	if err == redis.Nil {
+	if errors.Is(err, redis.Nil) {
 		return nil, nil
 	}
 	if err != nil {

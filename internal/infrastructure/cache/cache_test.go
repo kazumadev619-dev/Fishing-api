@@ -12,7 +12,7 @@ import (
 // NOTE: このテストはRedisが localhost:6379 で起動していることが前提。
 // docker-compose up -d redis で起動すること。
 func TestCacheClient_SetAndGet(t *testing.T) {
-	client, err := NewCacheClient("redis://localhost:6379")
+	client, err := NewCacheClient(context.Background(), "redis://localhost:6379")
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -30,7 +30,7 @@ func TestCacheClient_SetAndGet(t *testing.T) {
 }
 
 func TestCacheClient_Get_Miss(t *testing.T) {
-	client, err := NewCacheClient("redis://localhost:6379")
+	client, err := NewCacheClient(context.Background(), "redis://localhost:6379")
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -41,7 +41,7 @@ func TestCacheClient_Get_Miss(t *testing.T) {
 }
 
 func TestCacheClient_Delete(t *testing.T) {
-	client, err := NewCacheClient("redis://localhost:6379")
+	client, err := NewCacheClient(context.Background(), "redis://localhost:6379")
 	require.NoError(t, err)
 
 	ctx := context.Background()

@@ -24,7 +24,7 @@ func main() {
 	}
 	defer pool.Close()
 
-	cacheClient, err := cache.NewCacheClient(cfg.Redis.URL)
+	cacheClient, err := cache.NewCacheClient(ctx, cfg.Redis.URL)
 	if err != nil {
 		log.Fatalf("failed to connect to redis: %v", err)
 	}
