@@ -4,10 +4,10 @@ pre-commit:
   commands:
     gofumpt:
       glob: "*.go"
-      run: gofumpt -w {staged_files}
+      run: $(go env GOPATH)/bin/gofumpt -w {staged_files}
       stage_fixed: true
 
     golangci-lint:
       glob: "*.go"
-      run: golangci-lint run --fix --fast {staged_files}
+      run: golangci-lint run --fix --fast-only --no-config {staged_files}
       stage_fixed: true
