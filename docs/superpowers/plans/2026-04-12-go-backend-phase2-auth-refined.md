@@ -2,7 +2,7 @@
 
 **Goal:** JWT発行・検証、ユーザー登録・メール確認・ログイン・トークンリフレッシュ・JWTミドルウェアを実装し、認証APIが動作する状態にする。
 
-**Architecture:** `pkg/jwt` でJWT生成/検証。`infrastructure/db` が `domain/repository` インターフェースを実装。`usecase/auth` がビジネスロジックを担当。`interface/handler` がHTTPを処理。DIは `cmd/server/main.go` のみ。
+**Architecture:** `pkg/jwtutil` でJWT生成/検証。`infrastructure/db` が `domain/repository` インターフェースを実装。`usecase/auth` がビジネスロジックを担当。`interface/handler` がHTTPを処理。DIは `cmd/server/main.go` のみ。
 
 **Tech Stack:** golang-jwt/jwt v5, golang.org/x/crypto (既存indirect), resend-go/v2
 
@@ -18,6 +18,11 @@
 4. **sqlcgenインポートパス**: `github.com/kazumadev619-dev/fishing-api/db/generated`（パッケージ名: `sqlcgen`）。
 5. **CreateUserParams**: `PasswordHash` と `Name` は `sql.NullString` 型。
 6. **UpdateUserEmailVerifiedParams**: `EmailVerifiedAt` は `sql.NullTime` 型。
+7. **パッケージ名衝突回避**: `pkg/jwt` は `golang-jwt/jwt/v5` と同名になりファイル内で衝突。`pkg/jwtutil` に変更。
+8. **errors.Is を使用**: sentinel error の比較はすべて `errors.Is` を使用（`==` 禁止）。
+9. **bcrypt ダミーハッシュ禁止**: テストで `"$2a$10$..."` のようなダミー文字列は実際に失敗する。`bcrypt.GenerateFromPassword` で本物のハッシュを生成。
+10. **AppBaseURL はフィールド**: `cfg.Server.AppBaseURL` はメソッドではなく `string` フィールドとしてアクセス。
+11. **UserRepository 統合テスト追加**: Task 4.5 として testcontainers-go を使った `user_repository_test.go` を追加。
 
 ---
 
@@ -25,11 +30,12 @@
 
 | 操作 | ファイル |
 |------|---------|
-| 新規作成 | `pkg/jwt/jwt.go` |
-| 新規作成 | `pkg/jwt/jwt_test.go` |
+| 新規作成 | `pkg/jwtutil/jwt.go` |
+| 新規作成 | `pkg/jwtutil/jwt_test.go` |
 | 新規作成 | `pkg/validator/validator.go` |
 | 新規作成 | `pkg/validator/validator_test.go` |
 | 新規作成 | `internal/infrastructure/db/user_repository.go` |
+| 新規作成 | `internal/infrastructure/db/user_repository_test.go` |
 | 新規作成 | `internal/infrastructure/db/verification_token_repository.go` |
 | 新規作成 | `internal/infrastructure/email/email.go` |
 | 新規作成 | `internal/usecase/auth/auth.go` |
@@ -72,15 +78,15 @@ git commit -m "chore: golang-jwt/jwt v5 と resend-go/v2 を追加"
 ## Task 2: JWT生成・検証パッケージ
 
 **Files:**
-- Create: `pkg/jwt/jwt.go`
-- Create: `pkg/jwt/jwt_test.go`
+- Create: `pkg/jwtutil/jwt.go`
+- Create: `pkg/jwtutil/jwt_test.go`
 
 - [ ] **Step 1: テストを書く**
 
 プラン `Task 1: Step 1` のコードをそのまま使用（変更不要）。
 
 ```go
-// pkg/jwt/jwt_test.go
+// pkg/jwtutil/jwt_test.go
 package jwt
 
 import (
@@ -141,7 +147,7 @@ func TestValidateAccessToken_WrongSecret(t *testing.T) {
 - [ ] **Step 2: テストが失敗することを確認**
 
 ```bash
-go test ./pkg/jwt/... -v
+go test ./pkg/jwtutil/... -v
 ```
 
 Expected: FAIL（パッケージが存在しない）
@@ -151,7 +157,7 @@ Expected: FAIL（パッケージが存在しない）
 プランのコードをそのまま使用（変更不要）。
 
 ```go
-// pkg/jwt/jwt.go
+// pkg/jwtutil/jwt.go
 package jwt
 
 import (
@@ -233,7 +239,7 @@ func (m *Manager) validateToken(tokenStr, secret string) (*Claims, error) {
 - [ ] **Step 4: テストが通ることを確認**
 
 ```bash
-go test ./pkg/jwt/... -v
+go test ./pkg/jwtutil/... -v
 ```
 
 Expected: PASS
@@ -241,7 +247,7 @@ Expected: PASS
 - [ ] **Step 5: コミット**
 
 ```bash
-git add pkg/jwt/
+git add pkg/jwtutil/
 git commit -m "feat: JWT生成・検証パッケージ追加"
 ```
 
@@ -519,6 +525,134 @@ git commit -m "feat: UserRepository sqlc実装追加"
 
 ---
 
+## Task 4.5: UserRepository 統合テスト（testcontainers-go）
+
+**Files:**
+- Create: `internal/infrastructure/db/user_repository_test.go`
+
+- [ ] **Step 1: テストを書く**
+
+```go
+// internal/infrastructure/db/user_repository_test.go
+package db
+
+import (
+	"context"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go"
+)
+
+func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
+	t.Helper()
+	ctx := context.Background()
+
+	container, err := postgres.RunContainer(ctx,
+		testcontainers.WithImage("postgres:17"),
+		postgres.WithDatabase("testdb"),
+		postgres.WithUsername("test"),
+		postgres.WithPassword("test"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(30*time.Second),
+		),
+	)
+	require.NoError(t, err)
+
+	connStr, err := container.ConnectionString(ctx, "sslmode=disable")
+	require.NoError(t, err)
+
+	pool, err := NewPool(ctx, connStr)
+	require.NoError(t, err)
+
+	// スキーマ適用
+	schema, err := os.ReadFile("../../../db/schema.sql")
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, string(schema))
+	require.NoError(t, err)
+
+	return pool, func() {
+		pool.Close()
+		_ = container.Terminate(ctx)
+	}
+}
+
+func TestUserRepository_CreateAndFind(t *testing.T) {
+	pool, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	repo := NewUserRepository(pool)
+
+	hash := "hashed-password"
+	name := "Test User"
+	user := &entity.User{
+		ID:           uuid.New(),
+		Email:        "test-" + uuid.New().String() + "@example.com",
+		PasswordHash: &hash,
+		Name:         &name,
+		IsSSO:        false,
+	}
+
+	created, err := repo.Create(ctx, user)
+	require.NoError(t, err)
+	assert.Equal(t, user.Email, created.Email)
+	assert.Equal(t, hash, *created.PasswordHash)
+
+	found, err := repo.FindByEmail(ctx, user.Email)
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, found.ID)
+
+	foundByID, err := repo.FindByID(ctx, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, created.Email, foundByID.Email)
+}
+
+func TestUserRepository_FindByEmail_NotFound(t *testing.T) {
+	pool, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	repo := NewUserRepository(pool)
+
+	_, err := repo.FindByEmail(ctx, "nonexistent@example.com")
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+```
+
+**注意:** `wait` パッケージは `github.com/testcontainers/testcontainers-go/wait` から import する。`os` と `time` も import に追加。
+
+- [ ] **Step 2: テストが失敗することを確認（実装前）**
+
+```bash
+go test ./internal/infrastructure/db/... -v -run TestUserRepository
+```
+
+Expected: FAIL または SKIP（Dockerデーモン必要）
+
+- [ ] **Step 3: テストが通ることを確認（Task 4 実装後）**
+
+```bash
+go test ./internal/infrastructure/db/... -v -run TestUserRepository -timeout 120s
+```
+
+Expected: PASS
+
+- [ ] **Step 4: コミット**
+
+```bash
+git add internal/infrastructure/db/user_repository_test.go
+git commit -m "test: UserRepository testcontainers-go 統合テスト追加"
+```
+
+---
+
 ## Task 5: VerificationTokenRepository sqlc実装
 
 **Files:**
@@ -703,10 +837,11 @@ import (
 	"github.com/google/uuid"
 	domain "github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
-	jwtpkg "github.com/kazumadev619-dev/fishing-api/pkg/jwt"
+	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type MockUserRepository struct{ mock.Mock }
@@ -772,10 +907,12 @@ func TestAuthUsecase_Login_WrongPassword(t *testing.T) {
 	userRepo := &MockUserRepository{}
 	tokenRepo := &MockVerificationTokenRepository{}
 	emailClient := &MockEmailClient{}
-	jwtManager := jwtpkg.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	jwtManager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
 
-	// bcryptで生成したハッシュ（"correctpassword"のハッシュ）
-	hash := "$2a$10$somehashedpassword..."
+	// bcrypt.GenerateFromPassword で実際のハッシュを生成する（ダミー文字列は使わない）
+	rawHash, err := bcrypt.GenerateFromPassword([]byte("correctpassword"), bcrypt.DefaultCost)
+	require.NoError(t, err)
+	hash := string(rawHash)
 	name := "Test User"
 	userID := uuid.New()
 	verifiedAt := time.Now()
@@ -790,8 +927,8 @@ func TestAuthUsecase_Login_WrongPassword(t *testing.T) {
 	userRepo.On("FindByEmail", mock.Anything, "test@example.com").Return(user, nil)
 
 	uc := NewAuthUsecase(userRepo, tokenRepo, emailClient, jwtManager, "http://localhost:3000")
-	_, err := uc.Login(context.Background(), "test@example.com", "wrongpassword")
-	assert.Error(t, err)
+	_, loginErr := uc.Login(context.Background(), "test@example.com", "wrongpassword")
+	assert.ErrorIs(t, loginErr, domain.ErrUnauthorized)
 	userRepo.AssertExpectations(t)
 }
 
@@ -799,7 +936,7 @@ func TestAuthUsecase_Register_DuplicateEmail(t *testing.T) {
 	userRepo := &MockUserRepository{}
 	tokenRepo := &MockVerificationTokenRepository{}
 	emailClient := &MockEmailClient{}
-	jwtManager := jwtpkg.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	jwtManager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
 
 	name := "Existing User"
 	existingUser := &entity.User{ID: uuid.New(), Email: "exists@example.com", Name: &name}
@@ -815,7 +952,7 @@ func TestAuthUsecase_VerifyEmail_InvalidToken(t *testing.T) {
 	userRepo := &MockUserRepository{}
 	tokenRepo := &MockVerificationTokenRepository{}
 	emailClient := &MockEmailClient{}
-	jwtManager := jwtpkg.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	jwtManager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
 
 	tokenRepo.On("FindByToken", mock.Anything, "invalid-token").Return(nil, domain.ErrNotFound)
 
@@ -829,7 +966,7 @@ func TestAuthUsecase_Register_NewUser(t *testing.T) {
 	userRepo := &MockUserRepository{}
 	tokenRepo := &MockVerificationTokenRepository{}
 	emailClient := &MockEmailClient{}
-	jwtManager := jwtpkg.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	jwtManager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
 
 	userRepo.On("FindByEmail", mock.Anything, "new@example.com").Return(nil, domain.ErrNotFound)
 	name := "New User"
@@ -871,13 +1008,14 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	domain "github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/repository"
-	jwtpkg "github.com/kazumadev619-dev/fishing-api/pkg/jwt"
+	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -916,7 +1054,7 @@ func NewAuthUsecase(
 
 func (a *AuthUsecase) Register(ctx context.Context, email, password, name string) error {
 	existing, err := a.userRepo.FindByEmail(ctx, email)
-	if err != nil && err != domain.ErrNotFound {
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
 		return err
 	}
 	if existing != nil {
@@ -948,7 +1086,7 @@ func (a *AuthUsecase) Register(ctx context.Context, email, password, name string
 func (a *AuthUsecase) Login(ctx context.Context, email, password string) (*TokenPair, error) {
 	user, err := a.userRepo.FindByEmail(ctx, email)
 	if err != nil {
-		if err == domain.ErrNotFound {
+		if errors.Is(err, domain.ErrNotFound) {
 			return nil, domain.ErrUnauthorized
 		}
 		return nil, err
@@ -1087,13 +1225,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	jwtpkg "github.com/kazumadev619-dev/fishing-api/pkg/jwt"
+	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestJWTAuth_ValidToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	manager := jwtpkg.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	manager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
 	userID := uuid.New()
 
 	token, _ := manager.GenerateAccessToken(userID)
@@ -1115,7 +1253,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 
 func TestJWTAuth_MissingToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	manager := jwtpkg.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	manager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
 
 	router := gin.New()
 	router.Use(JWTAuth(manager))
@@ -1132,7 +1270,7 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 
 func TestJWTAuth_InvalidToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	manager := jwtpkg.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	manager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
 
 	router := gin.New()
 	router.Use(JWTAuth(manager))
@@ -1170,7 +1308,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	jwtpkg "github.com/kazumadev619-dev/fishing-api/pkg/jwt"
+	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 )
 
 func JWTAuth(jwtManager *jwtpkg.Manager) gin.HandlerFunc {
@@ -1340,12 +1478,15 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	domain "github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/usecase/auth"
 )
+// NOTE: handler が usecase/auth をインポートするのはクリーンアーキテクチャ上 OK（interface → usecase は許可された依存方向）。
+// AuthUsecaseInterface を handler パッケージで定義し *auth.TokenPair を参照するのは意図的な設計。
 
 type AuthUsecaseInterface interface {
 	Register(ctx context.Context, email, password, name string) error
@@ -1376,7 +1517,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	if err := h.usecase.Register(c.Request.Context(), req.Email, req.Password, req.Name); err != nil {
-		if err == domain.ErrAlreadyExists {
+		if errors.Is(err, domain.ErrAlreadyExists) {
 			c.JSON(http.StatusConflict, gin.H{"error": "email already registered", "code": "ALREADY_EXISTS", "status": 409})
 			return
 		}
@@ -1401,7 +1542,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	tokens, err := h.usecase.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
-		if err == domain.ErrUnauthorized {
+		if errors.Is(err, domain.ErrUnauthorized) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials", "code": "UNAUTHORIZED", "status": 401})
 			return
 		}
@@ -1460,7 +1601,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/handler"
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/middleware"
-	jwtpkg "github.com/kazumadev619-dev/fishing-api/pkg/jwt"
+	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 )
 
 type Handlers struct {
@@ -1512,7 +1653,7 @@ import (
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/handler"
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/router"
 	"github.com/kazumadev619-dev/fishing-api/internal/usecase/auth"
-	jwtpkg "github.com/kazumadev619-dev/fishing-api/pkg/jwt"
+	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 )
 
 func main() {
@@ -1542,7 +1683,7 @@ func main() {
 	_ = cacheClient // Phase 3以降で使用
 
 	// JWT
-	jwtManager := jwtpkg.NewManager(cfg.JWT.AccessSecret, cfg.JWT.RefreshSecret)
+	jwtManager := jwtutil.NewManager(cfg.JWT.AccessSecret, cfg.JWT.RefreshSecret)
 
 	// Repositories
 	userRepo := infradb.NewUserRepository(pool)
@@ -1552,7 +1693,7 @@ func main() {
 	emailClient := email.NewEmailClient(cfg.Email.ResendAPIKey, cfg.Email.FromAddress)
 
 	// Usecases
-	authUC := auth.NewAuthUsecase(userRepo, tokenRepo, emailClient, jwtManager, cfg.Server.AppBaseURL())
+	authUC := auth.NewAuthUsecase(userRepo, tokenRepo, emailClient, jwtManager, cfg.Server.AppBaseURL)
 
 	// Handlers
 	handlers := &router.Handlers{
@@ -1569,7 +1710,7 @@ func main() {
 }
 ```
 
-**注意:** `cfg.Server.AppBaseURL()` が存在しない場合は `"http://localhost:3000"` のリテラルを使用する（または `config.go` に `AppBaseURL string` フィールドを追加）。
+**注意:** `cfg.Server.AppBaseURL` は `string` フィールドとして `config.go` に追加する（Step 6 参照）。メソッドではなくフィールドとしてアクセスする。
 
 - [ ] **Step 6: config.go に APP_BASE_URL を追加（必要な場合）**
 
