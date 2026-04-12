@@ -7,8 +7,12 @@ import (
 
 	"github.com/kazumadev619-dev/fishing-api/config"
 	"github.com/kazumadev619-dev/fishing-api/internal/infrastructure/cache"
-	"github.com/kazumadev619-dev/fishing-api/internal/infrastructure/db"
+	infradb "github.com/kazumadev619-dev/fishing-api/internal/infrastructure/db"
+	"github.com/kazumadev619-dev/fishing-api/internal/infrastructure/email"
+	"github.com/kazumadev619-dev/fishing-api/internal/interface/handler"
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/router"
+	"github.com/kazumadev619-dev/fishing-api/internal/usecase/auth"
+	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 )
 
 func main() {
@@ -23,7 +27,7 @@ func main() {
 
 	ctx := context.Background()
 
-	pool, err := db.NewPool(ctx, cfg.Database.URL)
+	pool, err := infradb.NewPool(ctx, cfg.Database.URL)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)
@@ -35,10 +39,27 @@ func main() {
 		slog.Error("failed to connect to redis", "error", err)
 		os.Exit(1)
 	}
+	_ = cacheClient // Phase 3以降で使用
 
-	_ = cacheClient // Phase 2以降で使用
+	// JWT
+	jwtManager := jwtutil.NewManager(cfg.JWT.AccessSecret, cfg.JWT.RefreshSecret)
 
-	r := router.New()
+	// Repositories
+	userRepo := infradb.NewUserRepository(pool)
+	tokenRepo := infradb.NewVerificationTokenRepository(pool)
+
+	// Infrastructure
+	emailClient := email.NewEmailClient(cfg.Email.ResendAPIKey, cfg.Email.FromAddress)
+
+	// Usecases
+	authUC := auth.NewAuthUsecase(userRepo, tokenRepo, emailClient, jwtManager, cfg.Server.AppBaseURL)
+
+	// Handlers
+	handlers := &router.Handlers{
+		Auth: handler.NewAuthHandler(authUC),
+	}
+
+	r := router.New(handlers, jwtManager)
 
 	slog.Info("server starting", "port", cfg.Server.Port)
 	if err := r.Run(":" + cfg.Server.Port); err != nil {
