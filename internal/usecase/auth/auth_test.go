@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	domain "github.com/kazumadev619-dev/fishing-api/internal/domain"
+	"github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -181,6 +181,39 @@ func TestAuthUsecase_VerifyEmail_InvalidToken(t *testing.T) {
 	uc := NewAuthUsecase(userRepo, tokenRepo, emailClient, mockJWT, "http://localhost:3000")
 	err := uc.VerifyEmail(context.Background(), "invalid-token")
 	assert.ErrorIs(t, err, domain.ErrInvalidToken)
+	tokenRepo.AssertExpectations(t)
+}
+
+func TestAuthUsecase_VerifyEmail_Success(t *testing.T) {
+	userRepo := &MockUserRepository{}
+	tokenRepo := &MockVerificationTokenRepository{}
+	emailClient := &MockEmailClient{}
+	mockJWT := &MockJWTManager{}
+
+	userID := uuid.New()
+	user := &entity.User{
+		ID:              userID,
+		Email:           "user@example.com",
+		EmailVerifiedAt: nil,
+	}
+	vToken := &entity.VerificationToken{
+		Email:     "user@example.com",
+		Token:     "valid-token",
+		ExpiresAt: time.Now().Add(1 * time.Hour),
+	}
+	updatedUser := &entity.User{ID: userID, Email: "user@example.com"}
+
+	tokenRepo.On("FindByToken", mock.Anything, "valid-token").Return(vToken, nil)
+	userRepo.On("FindByEmail", mock.Anything, "user@example.com").Return(user, nil)
+	userRepo.On("UpdateEmailVerified", mock.Anything, userID, mock.MatchedBy(func(t time.Time) bool {
+		return !t.IsZero()
+	})).Return(updatedUser, nil)
+	tokenRepo.On("DeleteByEmail", mock.Anything, "user@example.com").Return(nil)
+
+	uc := NewAuthUsecase(userRepo, tokenRepo, emailClient, mockJWT, "http://localhost:3000")
+	err := uc.VerifyEmail(context.Background(), "valid-token")
+	require.NoError(t, err)
+	userRepo.AssertExpectations(t)
 	tokenRepo.AssertExpectations(t)
 }
 

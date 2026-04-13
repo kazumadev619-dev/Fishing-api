@@ -10,7 +10,7 @@ import (
 func TestLoad_Success(t *testing.T) {
 	t.Setenv("DATABASE_URL", "postgres://localhost/fishing")
 	t.Setenv("JWT_ACCESS_SECRET", "access-secret-32chars-minimum!!")
-	t.Setenv("JWT_REFRESH_SECRET", "refresh-secret-32chars-minimum!")
+	t.Setenv("JWT_REFRESH_SECRET", "refresh-secret-32chars-minimum!!")
 
 	cfg, err := Load()
 	require.NoError(t, err)

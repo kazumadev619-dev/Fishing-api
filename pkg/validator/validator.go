@@ -12,10 +12,13 @@ var (
 	uuidRegex  = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 )
 
+// IsValidEmail はクエリパラメータなど binding タグが使えない箇所向け（Phase 3以降で使用）。
+// ハンドラーのリクエストボディ検証は Gin の binding:"required,email" タグを使うこと。
 func IsValidEmail(email string) bool {
 	return emailRegex.MatchString(email)
 }
 
+// IsValidUUID はクエリパラメータなど binding タグが使えない箇所向け（Phase 3以降で使用）。
 func IsValidUUID(id string) bool {
 	return uuidRegex.MatchString(id)
 }

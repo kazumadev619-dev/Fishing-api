@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	domain "github.com/kazumadev619-dev/fishing-api/internal/domain"
+	"github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/usecase/auth"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

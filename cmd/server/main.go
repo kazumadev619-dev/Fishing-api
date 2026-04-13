@@ -14,7 +14,7 @@ import (
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/handler"
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/router"
 	"github.com/kazumadev619-dev/fishing-api/internal/usecase/auth"
-	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
+	"github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 )
 
 // jwtManagerAdapter は *jwtutil.Manager を auth.JWTManager インターフェースに適合させる
@@ -88,7 +88,7 @@ func main() {
 		Auth: handler.NewAuthHandler(authUC),
 	}
 
-	r := router.New(handlers, jwtManager)
+	r := router.New(handlers)
 
 	slog.Info("server starting", "port", cfg.Server.Port)
 	if err := r.Run(":" + cfg.Server.Port); err != nil {

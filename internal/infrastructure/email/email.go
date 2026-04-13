@@ -38,5 +38,8 @@ func (e *EmailClient) SendVerificationEmail(toEmail, token, appBaseURL string) e
 	}
 
 	_, err := e.client.Emails.Send(params)
-	return err
+	if err != nil {
+		return fmt.Errorf("sending verification email to %s: %w", toEmail, err)
+	}
+	return nil
 }

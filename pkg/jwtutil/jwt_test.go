@@ -10,7 +10,7 @@ import (
 )
 
 func TestGenerateAndValidateAccessToken(t *testing.T) {
-	manager := NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	manager := NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!!")
 	userID := uuid.New()
 
 	token, err := manager.GenerateAccessToken(userID)
@@ -24,7 +24,7 @@ func TestGenerateAndValidateAccessToken(t *testing.T) {
 }
 
 func TestGenerateAndValidateRefreshToken(t *testing.T) {
-	manager := NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	manager := NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!!")
 	userID := uuid.New()
 
 	token, err := manager.GenerateRefreshToken(userID)
@@ -37,7 +37,7 @@ func TestGenerateAndValidateRefreshToken(t *testing.T) {
 }
 
 func TestValidateAccessToken_InvalidToken(t *testing.T) {
-	manager := NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	manager := NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!!")
 	_, err := manager.ValidateAccessToken("invalid.token.here")
 	assert.Error(t, err)
 }

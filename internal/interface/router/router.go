@@ -3,15 +3,13 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/handler"
-	"github.com/kazumadev619-dev/fishing-api/internal/interface/middleware"
-	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 )
 
 type Handlers struct {
 	Auth *handler.AuthHandler
 }
 
-func New(handlers *Handlers, jwtManager *jwtutil.Manager) *gin.Engine {
+func New(handlers *Handlers) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
@@ -28,8 +26,7 @@ func New(handlers *Handlers, jwtManager *jwtutil.Manager) *gin.Engine {
 			authGroup.GET("/verify-email", handlers.Auth.VerifyEmail)
 		}
 
-		// 認証が必要なルート（Phase 3以降で追加）
-		_ = api.Group("").Use(middleware.JWTAuth(jwtManager))
+		// 認証が必要なルートは Phase 3 以降で追加する
 	}
 
 	return r

@@ -7,13 +7,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
+	"github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestJWTAuth_ValidToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	manager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	manager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!!")
 	userID := uuid.New()
 
 	token, _ := manager.GenerateAccessToken(userID)
@@ -35,7 +35,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 
 func TestJWTAuth_MissingToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	manager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	manager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!!")
 
 	router := gin.New()
 	router.Use(JWTAuth(manager))
@@ -52,7 +52,7 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 
 func TestJWTAuth_InvalidToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	manager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!")
+	manager := jwtutil.NewManager("access-secret-32chars-minimum!!", "refresh-secret-32chars-minimum!!")
 
 	router := gin.New()
 	router.Use(JWTAuth(manager))
