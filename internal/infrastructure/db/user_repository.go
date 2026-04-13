@@ -7,19 +7,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 	sqlcgen "github.com/kazumadev619-dev/fishing-api/db/generated"
 	domain "github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
+	"github.com/kazumadev619-dev/fishing-api/internal/domain/repository"
 )
 
 type userRepository struct {
 	queries *sqlcgen.Queries
 }
 
-func NewUserRepository(pool *pgxpool.Pool) *userRepository {
-	db := stdlib.OpenDBFromPool(pool)
+func NewUserRepository(db *sql.DB) repository.UserRepository {
 	return &userRepository{queries: sqlcgen.New(db)}
 }
 
