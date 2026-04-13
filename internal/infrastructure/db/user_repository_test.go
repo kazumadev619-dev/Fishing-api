@@ -2,12 +2,13 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
+func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -40,24 +41,26 @@ func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	pool, err := NewPool(ctx, connStr)
 	require.NoError(t, err)
 
+	db := stdlib.OpenDBFromPool(pool)
+
 	// Apply schema
 	schema, err := os.ReadFile("../../../db/schema.sql")
 	require.NoError(t, err)
-	_, err = pool.Exec(ctx, string(schema))
+	_, err = db.ExecContext(ctx, string(schema))
 	require.NoError(t, err)
 
-	return pool, func() {
-		pool.Close()
+	return db, func() {
+		db.Close()
 		_ = container.Terminate(ctx)
 	}
 }
 
 func TestUserRepository_CreateAndFind(t *testing.T) {
-	pool, cleanup := setupTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	repo := NewUserRepository(pool)
+	repo := NewUserRepository(db)
 
 	hash := "hashed-password"
 	name := "Test User"
@@ -84,11 +87,11 @@ func TestUserRepository_CreateAndFind(t *testing.T) {
 }
 
 func TestUserRepository_FindByEmail_NotFound(t *testing.T) {
-	pool, cleanup := setupTestDB(t)
+	db, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	ctx := context.Background()
-	repo := NewUserRepository(pool)
+	repo := NewUserRepository(db)
 
 	_, err := repo.FindByEmail(ctx, "nonexistent@example.com")
 	assert.ErrorIs(t, err, domain.ErrNotFound)

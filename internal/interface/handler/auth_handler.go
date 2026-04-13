@@ -64,6 +64,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	tokens, err := h.usecase.Login(c.Request.Context(), req.Email, req.Password)
 	if err != nil {
+		if errors.Is(err, domain.ErrEmailNotVerified) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "email not verified", "code": "EMAIL_NOT_VERIFIED", "status": 403})
+			return
+		}
 		if errors.Is(err, domain.ErrUnauthorized) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials", "code": "UNAUTHORIZED", "status": 401})
 			return
