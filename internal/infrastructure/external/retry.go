@@ -1,6 +1,7 @@
 package external
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -20,6 +21,9 @@ func newRetryTransport(maxRetries int) http.RoundTripper {
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var lastErr error
 	for i := 0; i <= t.maxRetries; i++ {
+		if err := req.Context().Err(); err != nil {
+			return nil, err
+		}
 		if i > 0 {
 			time.Sleep(time.Duration(i) * 500 * time.Millisecond)
 		}
@@ -30,7 +34,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		if err != nil {
 			lastErr = err
 		} else {
-			lastErr = nil
+			lastErr = fmt.Errorf("server error: status %d", resp.StatusCode)
 		}
 		if resp != nil {
 			resp.Body.Close()
