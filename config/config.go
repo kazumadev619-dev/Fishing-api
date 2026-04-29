@@ -15,7 +15,8 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port string
+	Port       string
+	AppBaseURL string
 }
 
 type DatabaseConfig struct {
@@ -44,7 +45,8 @@ type EmailConfig struct {
 func Load() (*Config, error) {
 	cfg := &Config{
 		Server: ServerConfig{
-			Port: getEnv("PORT", "8080"),
+			Port:       getEnv("PORT", "8080"),
+			AppBaseURL: getEnv("APP_BASE_URL", "http://localhost:3000"),
 		},
 		Database: DatabaseConfig{
 			URL: os.Getenv("DATABASE_URL"),
