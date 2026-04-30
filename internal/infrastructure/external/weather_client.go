@@ -1,6 +1,7 @@
 package external
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -44,11 +45,15 @@ type owmCurrentResponse struct {
 	Dt int64 `json:"dt"`
 }
 
-func (c *WeatherClient) FetchCurrent(lat, lon float64) (*entity.WeatherData, error) {
+func (c *WeatherClient) FetchCurrent(ctx context.Context, lat, lon float64) (*entity.WeatherData, error) {
 	url := fmt.Sprintf("%s/data/2.5/weather?lat=%f&lon=%f&appid=%s&units=metric&lang=ja",
 		c.baseURL, lat, lon, c.apiKey)
 
-	resp, err := c.client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating weather request: %w", err)
+	}
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("weather API request failed: %w", err)
 	}
@@ -99,11 +104,15 @@ type owmForecastResponse struct {
 	} `json:"list"`
 }
 
-func (c *WeatherClient) FetchForecast(lat, lon float64) ([]*entity.WeatherData, error) {
+func (c *WeatherClient) FetchForecast(ctx context.Context, lat, lon float64) ([]*entity.WeatherData, error) {
 	url := fmt.Sprintf("%s/data/2.5/forecast?lat=%f&lon=%f&appid=%s&units=metric&lang=ja",
 		c.baseURL, lat, lon, c.apiKey)
 
-	resp, err := c.client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating forecast request: %w", err)
+	}
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("forecast API request failed: %w", err)
 	}
