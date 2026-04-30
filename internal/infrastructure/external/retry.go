@@ -2,6 +2,7 @@ package external
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -37,6 +38,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			lastErr = fmt.Errorf("server error: status %d", resp.StatusCode)
 		}
 		if resp != nil {
+			io.Copy(io.Discard, resp.Body) //nolint:errcheck
 			resp.Body.Close()
 		}
 	}

@@ -28,6 +28,10 @@ func newWeatherClientWithBaseURL(apiKey, baseURL string) *WeatherClient {
 	return &WeatherClient{apiKey: apiKey, baseURL: baseURL, client: newHTTPClient()}
 }
 
+func newWeatherClientWithHTTPClient(apiKey, baseURL string, httpClient *http.Client) *WeatherClient {
+	return &WeatherClient{apiKey: apiKey, baseURL: baseURL, client: httpClient}
+}
+
 type owmCurrentResponse struct {
 	Main struct {
 		Temp      float64 `json:"temp"`
