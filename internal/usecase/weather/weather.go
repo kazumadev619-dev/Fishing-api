@@ -43,7 +43,8 @@ func NewWeatherUsecase(api WeatherAPI, cache Cache) *WeatherUsecase {
 func (u *WeatherUsecase) GetCurrent(ctx context.Context, lat, lon float64) (*entity.WeatherData, error) {
 	key := cacheKey(lat, lon, "current")
 
-	if cached, _ := u.cache.Get(ctx, key); cached != nil {
+	cached, _ := u.cache.Get(ctx, key) //nolint:errcheck // cache miss is acceptable
+	if cached != nil {
 		var data entity.WeatherData
 		if err := json.Unmarshal(cached, &data); err == nil {
 			return &data, nil
@@ -67,7 +68,8 @@ func (u *WeatherUsecase) GetCurrent(ctx context.Context, lat, lon float64) (*ent
 func (u *WeatherUsecase) GetForecast(ctx context.Context, lat, lon float64) ([]*entity.WeatherData, error) {
 	key := cacheKey(lat, lon, "forecast")
 
-	if cached, _ := u.cache.Get(ctx, key); cached != nil {
+	cached, _ := u.cache.Get(ctx, key) //nolint:errcheck // cache miss is acceptable
+	if cached != nil {
 		var data []*entity.WeatherData
 		if err := json.Unmarshal(cached, &data); err == nil {
 			return data, nil
