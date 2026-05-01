@@ -51,7 +51,7 @@ func (u *TideUsecase) GetTideData(ctx context.Context, prefCode, portCode, date 
 
 	data, err := u.api.FetchTideData(ctx, prefCode, portCode, date)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetching tide data for port %s on %s: %w", portCode, date, err)
 	}
 
 	if b, err := json.Marshal(data); err == nil {
