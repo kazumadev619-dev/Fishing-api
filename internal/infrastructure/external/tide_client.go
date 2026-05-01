@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 )
@@ -22,10 +23,6 @@ func NewTideClient() *TideClient {
 		baseURL: "https://tide736.net",
 		client:  newHTTPClient(),
 	}
-}
-
-func newTideClientWithBaseURL(baseURL string) *TideClient {
-	return &TideClient{baseURL: baseURL, client: newHTTPClient()}
 }
 
 func newTideClientWithHTTPClient(baseURL string, httpClient *http.Client) *TideClient {
@@ -73,8 +70,14 @@ func (c *TideClient) FetchTideData(ctx context.Context, prefCode, portCode, date
 		TideType: data.TideType,
 	}
 
-	loc, _ := time.LoadLocation("Asia/Tokyo")
-	dateBase, _ := time.ParseInLocation("2006-01-02", date, loc)
+	loc, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		return nil, fmt.Errorf("loading Asia/Tokyo location: %w", err)
+	}
+	dateBase, err := time.ParseInLocation("2006-01-02", date, loc)
+	if err != nil {
+		return nil, fmt.Errorf("parsing date %q: %w", date, err)
+	}
 
 	for _, h := range data.HighTides {
 		t, err := parseTimeOnDate(dateBase, h.Time, loc)
