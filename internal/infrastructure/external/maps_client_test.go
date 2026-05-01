@@ -41,6 +41,7 @@ func geocodeOKBody() map[string]interface{} {
 func TestMapsClient_SearchLocations(t *testing.T) {
 	tests := []struct {
 		name           string
+		statusCode     int
 		responseBody   map[string]interface{}
 		limit          int
 		wantErr        bool
@@ -52,6 +53,7 @@ func TestMapsClient_SearchLocations(t *testing.T) {
 	}{
 		{
 			name:           "正常取得",
+			statusCode:     http.StatusOK,
 			responseBody:   geocodeOKBody(),
 			limit:          5,
 			wantErr:        false,
@@ -62,7 +64,8 @@ func TestMapsClient_SearchLocations(t *testing.T) {
 			wantPrefecture: "静岡県",
 		},
 		{
-			name: "ZERO_RESULTS",
+			name:       "ZERO_RESULTS",
+			statusCode: http.StatusOK,
 			responseBody: map[string]interface{}{
 				"status":  "ZERO_RESULTS",
 				"results": []map[string]interface{}{},
@@ -72,7 +75,8 @@ func TestMapsClient_SearchLocations(t *testing.T) {
 			wantLen: 0,
 		},
 		{
-			name: "APIエラー(REQUEST_DENIED)",
+			name:       "APIエラー(REQUEST_DENIED)",
+			statusCode: http.StatusOK,
 			responseBody: map[string]interface{}{
 				"status":  "REQUEST_DENIED",
 				"results": []map[string]interface{}{},
@@ -82,10 +86,17 @@ func TestMapsClient_SearchLocations(t *testing.T) {
 		},
 		{
 			name:         "limit制限",
+			statusCode:   http.StatusOK,
 			responseBody: geocodeOKBody(),
 			limit:        0,
 			wantErr:      false,
 			wantLen:      0,
+		},
+		{
+			name:       "HTTP503エラー",
+			statusCode: http.StatusServiceUnavailable,
+			limit:      5,
+			wantErr:    true,
 		},
 	}
 
@@ -94,8 +105,10 @@ func TestMapsClient_SearchLocations(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				assert.Equal(t, "/maps/api/geocode/json", r.URL.Path)
 				assert.NotEmpty(t, r.URL.Query().Get("address"))
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(tt.responseBody)
+				w.WriteHeader(tt.statusCode)
+				if tt.responseBody != nil {
+					json.NewEncoder(w).Encode(tt.responseBody)
+				}
 			}))
 			defer server.Close()
 

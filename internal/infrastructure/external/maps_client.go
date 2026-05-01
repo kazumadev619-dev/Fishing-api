@@ -64,6 +64,10 @@ func (c *MapsClient) SearchLocations(ctx context.Context, query string, limit in
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("maps API returned status %d", resp.StatusCode)
+	}
+
 	var data geocodeResponse
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 		return nil, fmt.Errorf("failed to decode maps response: %w", err)
@@ -73,7 +77,7 @@ func (c *MapsClient) SearchLocations(ctx context.Context, query string, limit in
 		return nil, fmt.Errorf("maps API error: %s", data.Status)
 	}
 
-	results := make([]*entity.LocationSearchResult, 0)
+	var results []*entity.LocationSearchResult
 	for i, r := range data.Results {
 		if i >= limit {
 			break
