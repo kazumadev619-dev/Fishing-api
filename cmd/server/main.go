@@ -11,9 +11,15 @@ import (
 	"github.com/kazumadev619-dev/fishing-api/internal/infrastructure/cache"
 	infradb "github.com/kazumadev619-dev/fishing-api/internal/infrastructure/db"
 	"github.com/kazumadev619-dev/fishing-api/internal/infrastructure/email"
+	"github.com/kazumadev619-dev/fishing-api/internal/infrastructure/external"
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/handler"
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/router"
 	"github.com/kazumadev619-dev/fishing-api/internal/usecase/auth"
+	"github.com/kazumadev619-dev/fishing-api/internal/usecase/favorite"
+	"github.com/kazumadev619-dev/fishing-api/internal/usecase/location"
+	"github.com/kazumadev619-dev/fishing-api/internal/usecase/score"
+	"github.com/kazumadev619-dev/fishing-api/internal/usecase/tide"
+	"github.com/kazumadev619-dev/fishing-api/internal/usecase/weather"
 	"github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 )
 
@@ -55,7 +61,6 @@ func main() {
 	}
 	defer pool.Close()
 
-	// *sql.DB を1回だけ生成してコネクションプールを共有
 	db := stdlib.OpenDBFromPool(pool)
 	defer func() {
 		if err := db.Close(); err != nil {
@@ -68,27 +73,40 @@ func main() {
 		slog.Error("failed to connect to redis", "error", err)
 		os.Exit(1)
 	}
-	_ = cacheClient // Phase 3以降で使用
 
 	// JWT
 	jwtManager := jwtutil.NewManager(cfg.JWT.AccessSecret, cfg.JWT.RefreshSecret)
 
-	// Repositories（*sql.DB を共有）
+	// Repositories
 	userRepo := infradb.NewUserRepository(db)
 	tokenRepo := infradb.NewVerificationTokenRepository(db)
+	favoriteRepo := infradb.NewFavoriteRepository(db)
 
-	// Infrastructure
+	// External clients
+	weatherClient := external.NewWeatherClient(cfg.External.OpenWeatherAPIKey)
+	tideClient := external.NewTideClient()
+	mapsClient := external.NewMapsClient(cfg.External.GoogleMapsAPIKey)
 	emailClient := email.NewEmailClient(cfg.Email.ResendAPIKey, cfg.Email.FromAddress)
 
-	// Usecases（JWTManagerAdapter 経由で auth.JWTManager を満たす）
+	// Usecases
 	authUC := auth.NewAuthUsecase(userRepo, tokenRepo, emailClient, &jwtManagerAdapter{m: jwtManager}, cfg.Server.AppBaseURL)
+	weatherUC := weather.NewWeatherUsecase(weatherClient, cacheClient)
+	tideUC := tide.NewTideUsecase(tideClient, cacheClient)
+	locationUC := location.NewLocationUsecase(mapsClient, cacheClient)
+	scoreUC := score.NewScoreUsecase()
+	_ = scoreUC
+	favoriteUC := favorite.NewFavoriteUsecase(favoriteRepo)
 
 	// Handlers
 	handlers := &router.Handlers{
-		Auth: handler.NewAuthHandler(authUC),
+		Auth:     handler.NewAuthHandler(authUC),
+		Weather:  handler.NewWeatherHandler(weatherUC),
+		Tide:     handler.NewTideHandler(tideUC),
+		Location: handler.NewLocationHandler(locationUC),
+		Favorite: handler.NewFavoriteHandler(favoriteUC),
 	}
 
-	r := router.New(handlers)
+	r := router.New(handlers, jwtManager)
 
 	slog.Info("server starting", "port", cfg.Server.Port)
 	if err := r.Run(":" + cfg.Server.Port); err != nil {
