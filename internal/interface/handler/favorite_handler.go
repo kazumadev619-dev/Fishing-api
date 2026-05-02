@@ -78,6 +78,10 @@ func (h *FavoriteHandler) Delete(c *gin.Context) {
 	}
 
 	if err := h.usecase.Delete(c.Request.Context(), userID, locationID); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "favorite not found", "code": "NOT_FOUND", "status": 404})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete favorite", "code": "INTERNAL_ERROR", "status": 500})
 		return
 	}
