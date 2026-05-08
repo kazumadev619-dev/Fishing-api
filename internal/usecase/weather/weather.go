@@ -53,7 +53,7 @@ func (u *WeatherUsecase) GetCurrent(ctx context.Context, lat, lon float64) (*ent
 
 	data, err := u.api.FetchCurrent(ctx, lat, lon)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetching current weather for %.4f,%.4f: %w", lat, lon, err)
 	}
 
 	if b, err := json.Marshal(data); err == nil {
@@ -78,7 +78,7 @@ func (u *WeatherUsecase) GetForecast(ctx context.Context, lat, lon float64) ([]*
 
 	data, err := u.api.FetchForecast(ctx, lat, lon)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetching weather forecast for %.4f,%.4f: %w", lat, lon, err)
 	}
 
 	if b, err := json.Marshal(data); err == nil {

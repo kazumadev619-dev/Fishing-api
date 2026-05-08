@@ -39,7 +39,7 @@ func NewTideUsecase(api TideAPI, cache Cache) *TideUsecase {
 // GetTideData は指定された港コード・日付の潮汐データを返す。
 // キャッシュにデータがある場合はAPIを呼ばずキャッシュから返す。
 func (u *TideUsecase) GetTideData(ctx context.Context, prefCode, portCode, date string) (*entity.TideData, error) {
-	key := fmt.Sprintf("tide:%s:%s", portCode, date)
+	key := fmt.Sprintf("tide:%s:%s:%s", prefCode, portCode, date)
 
 	cached, _ := u.cache.Get(ctx, key) //nolint:errcheck // cache miss is acceptable
 	if cached != nil {

@@ -9,15 +9,15 @@ import (
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 )
 
-type LocationUsecaseInterface interface {
+type LocationSearcher interface {
 	Search(ctx context.Context, query string, limit int) ([]*entity.LocationSearchResult, error)
 }
 
 type LocationHandler struct {
-	usecase LocationUsecaseInterface
+	usecase LocationSearcher
 }
 
-func NewLocationHandler(uc LocationUsecaseInterface) *LocationHandler {
+func NewLocationHandler(uc LocationSearcher) *LocationHandler {
 	return &LocationHandler{usecase: uc}
 }
 

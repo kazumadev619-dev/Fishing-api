@@ -11,17 +11,17 @@ import (
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 )
 
-type FavoriteUsecaseInterface interface {
+type FavoriteManager interface {
 	GetList(ctx context.Context, userID uuid.UUID) ([]*entity.Location, error)
 	Add(ctx context.Context, userID uuid.UUID, locationID uuid.UUID) error
 	Delete(ctx context.Context, userID uuid.UUID, locationID uuid.UUID) error
 }
 
 type FavoriteHandler struct {
-	usecase FavoriteUsecaseInterface
+	usecase FavoriteManager
 }
 
-func NewFavoriteHandler(uc FavoriteUsecaseInterface) *FavoriteHandler {
+func NewFavoriteHandler(uc FavoriteManager) *FavoriteHandler {
 	return &FavoriteHandler{usecase: uc}
 }
 

@@ -62,7 +62,7 @@ func TestGetTideData_CacheMiss(t *testing.T) {
 		},
 		TideType: "大潮",
 	}
-	expectedKey := "tide:" + portCode + ":" + date
+	expectedKey := "tide:" + prefCode + ":" + portCode + ":" + date
 
 	// キャッシュにはヒットしない
 	mockCache.On("Get", ctx, expectedKey).Return(nil, errors.New("cache miss"))
@@ -105,7 +105,7 @@ func TestGetTideData_CacheHit(t *testing.T) {
 	cachedJSON, err := json.Marshal(cachedData)
 	require.NoError(t, err)
 
-	expectedKey := "tide:" + portCode + ":" + date
+	expectedKey := "tide:" + prefCode + ":" + portCode + ":" + date
 
 	// キャッシュにヒット
 	mockCache.On("Get", ctx, expectedKey).Return(cachedJSON, nil)
@@ -131,7 +131,7 @@ func TestGetTideData_APIError(t *testing.T) {
 	portCode := "TK"
 	date := "20260430"
 
-	expectedKey := "tide:" + portCode + ":" + date
+	expectedKey := "tide:" + prefCode + ":" + portCode + ":" + date
 	apiErr := errors.New("tide API request failed")
 
 	mockCache.On("Get", ctx, expectedKey).Return(nil, errors.New("cache miss"))

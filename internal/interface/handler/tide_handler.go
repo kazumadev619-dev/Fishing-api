@@ -10,15 +10,15 @@ import (
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 )
 
-type TideUsecaseInterface interface {
+type TideFetcher interface {
 	GetTideData(ctx context.Context, prefCode, portCode, date string) (*entity.TideData, error)
 }
 
 type TideHandler struct {
-	usecase TideUsecaseInterface
+	usecase TideFetcher
 }
 
-func NewTideHandler(uc TideUsecaseInterface) *TideHandler {
+func NewTideHandler(uc TideFetcher) *TideHandler {
 	return &TideHandler{usecase: uc}
 }
 

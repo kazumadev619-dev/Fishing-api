@@ -17,7 +17,6 @@ import (
 	"github.com/kazumadev619-dev/fishing-api/internal/usecase/auth"
 	"github.com/kazumadev619-dev/fishing-api/internal/usecase/favorite"
 	"github.com/kazumadev619-dev/fishing-api/internal/usecase/location"
-	"github.com/kazumadev619-dev/fishing-api/internal/usecase/score"
 	"github.com/kazumadev619-dev/fishing-api/internal/usecase/tide"
 	"github.com/kazumadev619-dev/fishing-api/internal/usecase/weather"
 	"github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
@@ -93,8 +92,6 @@ func main() {
 	weatherUC := weather.NewWeatherUsecase(weatherClient, cacheClient)
 	tideUC := tide.NewTideUsecase(tideClient, cacheClient)
 	locationUC := location.NewLocationUsecase(mapsClient, cacheClient)
-	scoreUC := score.NewScoreUsecase()
-	_ = scoreUC
 	favoriteUC := favorite.NewFavoriteUsecase(favoriteRepo)
 
 	// Handlers

@@ -9,16 +9,16 @@ import (
 	"github.com/kazumadev619-dev/fishing-api/pkg/validator"
 )
 
-type WeatherUsecaseInterface interface {
+type WeatherFetcher interface {
 	GetCurrent(ctx context.Context, lat, lon float64) (*entity.WeatherData, error)
 	GetForecast(ctx context.Context, lat, lon float64) ([]*entity.WeatherData, error)
 }
 
 type WeatherHandler struct {
-	usecase WeatherUsecaseInterface
+	usecase WeatherFetcher
 }
 
-func NewWeatherHandler(uc WeatherUsecaseInterface) *WeatherHandler {
+func NewWeatherHandler(uc WeatherFetcher) *WeatherHandler {
 	return &WeatherHandler{usecase: uc}
 }
 

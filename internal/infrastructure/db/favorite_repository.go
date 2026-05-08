@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	sqlcgen "github.com/kazumadev619-dev/fishing-api/db/generated"
+	domain "github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/repository"
 )
@@ -40,10 +41,21 @@ func (r *favoriteRepository) Add(ctx context.Context, userID uuid.UUID, location
 }
 
 func (r *favoriteRepository) Delete(ctx context.Context, userID uuid.UUID, locationID uuid.UUID) error {
-	return r.queries.DeleteFavorite(ctx, sqlcgen.DeleteFavoriteParams{
+	result, err := r.queries.DeleteFavorite(ctx, sqlcgen.DeleteFavoriteParams{
 		UserID:     userID,
 		LocationID: locationID,
 	})
+	if err != nil {
+		return fmt.Errorf("deleting favorite: %w", err)
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("checking rows affected: %w", err)
+	}
+	if n == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func (r *favoriteRepository) Exists(ctx context.Context, userID uuid.UUID, locationID uuid.UUID) (bool, error) {
