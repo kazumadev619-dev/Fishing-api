@@ -1,0 +1,57 @@
+package external
+
+import (
+	"fmt"
+	"io"
+	"net/http"
+	"time"
+)
+
+type retryTransport struct {
+	base       http.RoundTripper
+	maxRetries int
+}
+
+func newRetryTransport(maxRetries int) http.RoundTripper {
+	return &retryTransport{
+		base:       http.DefaultTransport,
+		maxRetries: maxRetries,
+	}
+}
+
+func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	var lastErr error
+	for i := 0; i <= t.maxRetries; i++ {
+		if err := req.Context().Err(); err != nil {
+			return nil, err
+		}
+		if i > 0 {
+			select {
+			case <-time.After(time.Duration(i) * 500 * time.Millisecond):
+			case <-req.Context().Done():
+				return nil, req.Context().Err()
+			}
+		}
+		resp, err := t.base.RoundTrip(req)
+		if err == nil && resp.StatusCode < 500 {
+			return resp, nil
+		}
+		if err != nil {
+			lastErr = err
+		} else {
+			lastErr = fmt.Errorf("server error: status %d", resp.StatusCode)
+		}
+		if resp != nil {
+			io.Copy(io.Discard, resp.Body) //nolint:errcheck
+			resp.Body.Close()
+		}
+	}
+	return nil, lastErr
+}
+
+func newHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: newRetryTransport(3),
+	}
+}

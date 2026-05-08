@@ -3,13 +3,19 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/kazumadev619-dev/fishing-api/internal/interface/handler"
+	"github.com/kazumadev619-dev/fishing-api/internal/interface/middleware"
+	jwtutil "github.com/kazumadev619-dev/fishing-api/pkg/jwtutil"
 )
 
 type Handlers struct {
-	Auth *handler.AuthHandler
+	Auth     *handler.AuthHandler
+	Weather  *handler.WeatherHandler
+	Tide     *handler.TideHandler
+	Location *handler.LocationHandler
+	Favorite *handler.FavoriteHandler
 }
 
-func New(handlers *Handlers) *gin.Engine {
+func New(handlers *Handlers, jwtManager *jwtutil.Manager) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
@@ -26,7 +32,16 @@ func New(handlers *Handlers) *gin.Engine {
 			authGroup.GET("/verify-email", handlers.Auth.VerifyEmail)
 		}
 
-		// 認証が必要なルートは Phase 3 以降で追加する
+		api.GET("/weather", handlers.Weather.Get)
+		api.GET("/conditions/tide", handlers.Tide.Get)
+		api.GET("/locations/search", handlers.Location.Search)
+
+		protected := api.Group("").Use(middleware.JWTAuth(jwtManager))
+		{
+			protected.GET("/favorites", handlers.Favorite.GetList)
+			protected.POST("/favorites", handlers.Favorite.Add)
+			protected.DELETE("/favorites/:id", handlers.Favorite.Delete)
+		}
 	}
 
 	return r

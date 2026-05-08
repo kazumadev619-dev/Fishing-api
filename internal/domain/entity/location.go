@@ -41,3 +41,11 @@ type Port struct {
 	Longitude      *float64
 	CreatedAt      time.Time
 }
+
+type LocationSearchResult struct {
+	Name       string
+	Latitude   float64
+	Longitude  float64
+	Prefecture string
+	Region     string
+}
