@@ -36,12 +36,16 @@ func (h *LocationHandler) Search(c *gin.Context) {
 		return
 	}
 
+	const maxLimit = 20
 	limit := 5
 	if limitStr := c.Query("limit"); limitStr != "" {
 		parsed, err := strconv.Atoi(limitStr)
 		if err != nil || parsed < 1 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit parameter", "code": "INVALID_PARAMS", "status": 400})
 			return
+		}
+		if parsed > maxLimit {
+			parsed = maxLimit
 		}
 		limit = parsed
 	}

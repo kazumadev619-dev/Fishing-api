@@ -73,6 +73,12 @@ func TestTideHandler_Get(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
+			name:       "意味的に無効な日付 → 400",
+			url:        "/api/conditions/tide?prefectureCode=13&portCode=TK&date=2026-99-99",
+			setupMock:  func(m *MockTideUsecase) {},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
 			name: "APIエラー → 500",
 			url:  "/api/conditions/tide?prefectureCode=13&portCode=TK&date=2026-04-30",
 			setupMock: func(m *MockTideUsecase) {

@@ -14,7 +14,9 @@ const (
 	maxTimeScore    = 25
 )
 
-// ScoreUsecase は釣りやすさスコアを算出するユースケースなのだ。
+// ScoreUsecase は釣りやすさスコアを算出する純粋なロジックを担う。
+// 単独エンドポイントは持たず、将来の集約エンドポイント（例: /api/conditions）で
+// WeatherUsecase・TideUsecase と組み合わせて利用する想定。
 type ScoreUsecase struct{}
 
 // NewScoreUsecase は ScoreUsecase を生成するのだ。
@@ -52,7 +54,9 @@ func (u *ScoreUsecase) calculateTideScore(tide *entity.TideData, now time.Time) 
 		return maxTideScore / 2
 	}
 
-	allEvents := append(tide.HighTides, tide.LowTides...)
+	allEvents := make([]entity.TideEvent, 0, len(tide.HighTides)+len(tide.LowTides))
+	allEvents = append(allEvents, tide.HighTides...)
+	allEvents = append(allEvents, tide.LowTides...)
 
 	minMinutes := math.MaxFloat64
 	for _, event := range allEvents {

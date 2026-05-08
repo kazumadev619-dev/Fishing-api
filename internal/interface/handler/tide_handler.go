@@ -53,6 +53,10 @@ func (h *TideHandler) Get(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format. Use YYYY-MM-DD", "code": "INVALID_PARAMS", "status": 400})
 		return
 	}
+	if _, err := time.Parse("2006-01-02", date); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date", "code": "INVALID_PARAMS", "status": 400})
+		return
+	}
 
 	data, err := h.usecase.GetTideData(c.Request.Context(), prefCode, portCode, date)
 	if err != nil {

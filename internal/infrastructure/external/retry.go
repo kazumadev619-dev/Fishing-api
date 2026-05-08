@@ -26,7 +26,11 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return nil, err
 		}
 		if i > 0 {
-			time.Sleep(time.Duration(i) * 500 * time.Millisecond)
+			select {
+			case <-time.After(time.Duration(i) * 500 * time.Millisecond):
+			case <-req.Context().Done():
+				return nil, req.Context().Err()
+			}
 		}
 		resp, err := t.base.RoundTrip(req)
 		if err == nil && resp.StatusCode < 500 {

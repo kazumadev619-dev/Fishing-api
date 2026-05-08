@@ -2,8 +2,10 @@ package location
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -49,7 +51,8 @@ func TestSearch_CacheMiss(t *testing.T) {
 
 	query := "東京湾"
 	limit := 5
-	expectedKey := "location:東京湾:5"
+	h := sha256.Sum256([]byte(query))
+	expectedKey := fmt.Sprintf("location:%x:%d", h, limit)
 
 	expectedResults := []*entity.LocationSearchResult{
 		{
@@ -94,7 +97,8 @@ func TestSearch_CacheHit(t *testing.T) {
 
 	query := "大阪湾"
 	limit := 3
-	expectedKey := "location:大阪湾:3"
+	h2 := sha256.Sum256([]byte(query))
+	expectedKey := fmt.Sprintf("location:%x:%d", h2, limit)
 
 	cachedResults := []*entity.LocationSearchResult{
 		{
@@ -130,7 +134,8 @@ func TestSearch_APIError(t *testing.T) {
 
 	query := "不明な場所"
 	limit := 10
-	expectedKey := "location:不明な場所:10"
+	h3 := sha256.Sum256([]byte(query))
+	expectedKey := fmt.Sprintf("location:%x:%d", h3, limit)
 	apiErr := errors.New("maps API request failed")
 
 	mockCache.On("Get", ctx, expectedKey).Return(nil, errors.New("cache miss"))

@@ -2,6 +2,7 @@ package location
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -39,7 +40,8 @@ func NewLocationUsecase(mapsAPI MapsAPI, cache Cache) *LocationUsecase {
 // Search は指定クエリで場所を検索し、結果を返す。
 // キャッシュにデータがある場合はAPIを呼ばずキャッシュから返す。
 func (u *LocationUsecase) Search(ctx context.Context, query string, limit int) ([]*entity.LocationSearchResult, error) {
-	key := fmt.Sprintf("location:%s:%d", query, limit)
+	h := sha256.Sum256([]byte(query))
+	key := fmt.Sprintf("location:%x:%d", h, limit)
 
 	cached, _ := u.cache.Get(ctx, key) //nolint:errcheck // cache miss is acceptable
 	if cached != nil {

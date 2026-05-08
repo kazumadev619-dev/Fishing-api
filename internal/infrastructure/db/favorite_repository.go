@@ -33,11 +33,14 @@ func (r *favoriteRepository) FindByUserID(ctx context.Context, userID uuid.UUID)
 }
 
 func (r *favoriteRepository) Add(ctx context.Context, userID uuid.UUID, locationID uuid.UUID) error {
-	return r.queries.AddFavorite(ctx, sqlcgen.AddFavoriteParams{
+	if err := r.queries.AddFavorite(ctx, sqlcgen.AddFavoriteParams{
 		ID:         uuid.New(),
 		UserID:     userID,
 		LocationID: locationID,
-	})
+	}); err != nil {
+		return fmt.Errorf("adding favorite for user %s: %w", userID, err)
+	}
+	return nil
 }
 
 func (r *favoriteRepository) Delete(ctx context.Context, userID uuid.UUID, locationID uuid.UUID) error {
