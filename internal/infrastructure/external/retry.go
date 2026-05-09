@@ -42,8 +42,12 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			lastErr = fmt.Errorf("server error: status %d", resp.StatusCode)
 		}
 		if resp != nil {
+			// リトライループ内: 失敗確定レスポンスを読み捨てて close する。
+			// ここで close エラーを slog.Warn 化すると最大 maxRetries 回 Warn が
+			// 連続出力され、本物のリトライ失敗ログを埋もれさせる懸念があるため
+			// nolint で抑止する（io.Copy も同方針）。
 			io.Copy(io.Discard, resp.Body) //nolint:errcheck
-			resp.Body.Close()
+			resp.Body.Close()              //nolint:errcheck
 		}
 	}
 	return nil, lastErr
