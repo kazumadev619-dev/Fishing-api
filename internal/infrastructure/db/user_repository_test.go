@@ -50,7 +50,9 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 
 	return db, func() {
 		db.Close()
-		_ = container.Terminate(ctx)
+		if err := container.Terminate(ctx); err != nil {
+			t.Logf("failed to terminate test container: %v", err)
+		}
 	}
 }
 

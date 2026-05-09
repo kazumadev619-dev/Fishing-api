@@ -43,6 +43,9 @@ func (a *jwtManagerAdapter) ValidateRefreshToken(tokenStr string) (uuid.UUID, er
 }
 
 func main() {
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	slog.SetDefault(logger)
+
 	if err := run(); err != nil {
 		slog.Error("server fatal error", "error", err)
 		os.Exit(1)
@@ -50,9 +53,6 @@ func main() {
 }
 
 func run() error {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	slog.SetDefault(logger)
-
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("loading config: %w", err)
