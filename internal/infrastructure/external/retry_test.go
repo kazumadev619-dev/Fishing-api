@@ -35,6 +35,11 @@ func TestRetryTransport_RetryOn5xx(t *testing.T) {
 
 	client := newHTTPClient()
 	resp, err := client.Get(server.URL)
+	// retryTransport は全リトライ失敗時に必ず (nil, err) を返すため resp は nil 想定。
+	// 将来 retry.go の戻り値仕様が変わっても body リークを起こさないよう防御的に close。
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	// 4回試行（0+3retry）してすべて5xxならエラーを返す
 	assert.Error(t, err)
 	assert.Nil(t, resp)
