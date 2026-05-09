@@ -6,16 +6,13 @@ linters:
   default: standard
 
   enable:
-    # --- fast subset（PostToolUse・pre-commitで使用） ---
+    # --- fast subset（PostToolUse・pre-commit で使用） ---
     - errcheck        # エラー無視の検出
     - govet           # go vet 相当
-    - staticcheck     # 高度な静的解析
+    - staticcheck     # 高度な静的解析（gosimple は v2 で staticcheck に統合済み）
     - unused          # 未使用コード
-    - gosimple        # 簡略化できるコードの検出
     - ineffassign     # 無効な代入の検出
     # --- full（CI のみで実行） ---
-    - gofumpt         # gofumpt フォーマットチェック
-    - goimports       # import 順序チェック
     - gocritic        # 追加静的解析
     - noctx           # context なし HTTP リクエスト検出
     - bodyclose       # response body の close 漏れ検出
@@ -23,20 +20,26 @@ linters:
     - exhaustive      # switch 文の網羅性チェック
     - wrapcheck       # エラーラップ漏れ検出（外部パッケージ呼び出し時）
 
-linters-settings:
-  gofumpt:
-    module-path: github.com/kazumadev619-dev/fishing-api
-  exhaustive:
-    default-signifies-exhaustive: true
+  settings:
+    exhaustive:
+      default-signifies-exhaustive: true
 
-issues:
-  exclude-rules:
-    # テストコードは errcheck・wrapcheck を緩和
-    - path: _test\.go
-      linters:
-        - errcheck
-        - wrapcheck
-    # 生成コードは除外
-    - path: db/generated/
-      linters:
-        - all
+  exclusions:
+    rules:
+      # テストコードは errcheck・wrapcheck を緩和
+      - path: _test\.go
+        linters:
+          - errcheck
+          - wrapcheck
+      # 生成コードは除外（パスベースで全 linter を抑止）
+      - path: db/generated/
+        text: ".*"
+
+formatters:
+  # gofumpt / goimports は v2 では formatter として分類される
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    gofumpt:
+      module-path: github.com/kazumadev619-dev/fishing-api
