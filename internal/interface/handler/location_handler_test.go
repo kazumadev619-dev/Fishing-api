@@ -95,7 +95,7 @@ func TestLocationHandler_Search(t *testing.T) {
 			h := NewLocationHandler(mockUC)
 			router.GET("/api/locations/search", h.Search)
 
-			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tt.url, nil)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 

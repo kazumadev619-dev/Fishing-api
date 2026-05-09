@@ -15,7 +15,7 @@ func TestHealthCheck(t *testing.T) {
 	router := gin.New()
 	router.GET("/health", HealthCheck)
 
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

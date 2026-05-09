@@ -82,7 +82,7 @@ func TestFavoriteHandler_GetList(t *testing.T) {
 			tt.setupMock(mockUC)
 
 			router := setupFavoriteRouter(NewFavoriteHandler(mockUC))
-			req := httptest.NewRequest(http.MethodGet, "/api/favorites", nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/favorites", nil)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
@@ -148,7 +148,7 @@ func TestFavoriteHandler_Add(t *testing.T) {
 
 			router := setupFavoriteRouter(NewFavoriteHandler(mockUC))
 			bodyBytes, _ := json.Marshal(tt.body)
-			req := httptest.NewRequest(http.MethodPost, "/api/favorites", bytes.NewReader(bodyBytes))
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/favorites", bytes.NewReader(bodyBytes))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
@@ -208,7 +208,7 @@ func TestFavoriteHandler_Delete(t *testing.T) {
 			tt.setupMock(mockUC)
 
 			router := setupFavoriteRouter(NewFavoriteHandler(mockUC))
-			req := httptest.NewRequest(http.MethodDelete, "/api/favorites/"+tt.paramID, nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodDelete, "/api/favorites/"+tt.paramID, nil)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 

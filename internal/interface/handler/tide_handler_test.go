@@ -97,7 +97,7 @@ func TestTideHandler_Get(t *testing.T) {
 			h := NewTideHandler(mockUC)
 			router.GET("/api/conditions/tide", h.Get)
 
-			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, tt.url, nil)
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
 
