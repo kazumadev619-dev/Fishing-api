@@ -25,7 +25,7 @@ func TestJWTAuth_ValidToken(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{"user_id": id})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -43,7 +43,7 @@ func TestJWTAuth_MissingToken(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -60,7 +60,7 @@ func TestJWTAuth_InvalidToken(t *testing.T) {
 		c.JSON(http.StatusOK, gin.H{})
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
 	req.Header.Set("Authorization", "Bearer invalid.token.here")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)

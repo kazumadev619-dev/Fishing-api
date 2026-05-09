@@ -58,7 +58,7 @@ func TestAuthHandler_Register_Success(t *testing.T) {
 		"name":     "New User",
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/register", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -73,7 +73,7 @@ func TestAuthHandler_Register_InvalidBody(t *testing.T) {
 	h := NewAuthHandler(&MockAuthUsecase{})
 	router.POST("/api/auth/register", h.Register)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewReader([]byte(`{}`)))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/register", bytes.NewReader([]byte(`{}`)))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -95,7 +95,7 @@ func TestAuthHandler_Login_Success(t *testing.T) {
 		"email":    "user@example.com",
 		"password": "password123",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -117,7 +117,7 @@ func TestAuthHandler_Login_Unauthorized(t *testing.T) {
 		"email":    "bad@example.com",
 		"password": "wrongpass",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -139,7 +139,7 @@ func TestAuthHandler_Login_EmailNotVerified(t *testing.T) {
 		"email":    "unverified@example.com",
 		"password": "password123",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/login", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -159,7 +159,7 @@ func TestAuthHandler_RefreshToken_Success(t *testing.T) {
 	router.POST("/api/auth/refresh", h.RefreshToken)
 
 	body, _ := json.Marshal(map[string]string{"refresh_token": "valid-refresh"})
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/refresh", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -178,7 +178,7 @@ func TestAuthHandler_RefreshToken_Invalid(t *testing.T) {
 	router.POST("/api/auth/refresh", h.RefreshToken)
 
 	body, _ := json.Marshal(map[string]string{"refresh_token": "bad-token"})
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", bytes.NewReader(body))
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/auth/refresh", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -196,7 +196,7 @@ func TestAuthHandler_VerifyEmail_Success(t *testing.T) {
 	h := NewAuthHandler(mockUC)
 	router.GET("/api/auth/verify-email", h.VerifyEmail)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/auth/verify-email?token=valid-token", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/auth/verify-email?token=valid-token", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -213,7 +213,7 @@ func TestAuthHandler_VerifyEmail_InvalidToken(t *testing.T) {
 	h := NewAuthHandler(mockUC)
 	router.GET("/api/auth/verify-email", h.VerifyEmail)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/auth/verify-email?token=bad-token", nil)
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/auth/verify-email?token=bad-token", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

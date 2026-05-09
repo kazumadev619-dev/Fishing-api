@@ -18,7 +18,9 @@ func TestRetryTransport_SuccessOnFirstTry(t *testing.T) {
 	defer server.Close()
 
 	client := newHTTPClient()
-	resp, err := client.Get(server.URL)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
@@ -34,7 +36,9 @@ func TestRetryTransport_RetryOn5xx(t *testing.T) {
 	defer server.Close()
 
 	client := newHTTPClient()
-	resp, err := client.Get(server.URL)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
 	// retryTransport は全リトライ失敗時に必ず (nil, err) を返すため resp は nil 想定。
 	// 将来 retry.go の戻り値仕様が変わっても body リークを起こさないよう防御的に close。
 	if resp != nil {
@@ -59,7 +63,9 @@ func TestRetryTransport_SuccessOnRetry(t *testing.T) {
 	defer server.Close()
 
 	client := newHTTPClient()
-	resp, err := client.Get(server.URL)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, server.URL, nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
