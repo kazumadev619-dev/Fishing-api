@@ -58,6 +58,8 @@ func (c *WeatherClient) FetchCurrent(ctx context.Context, lat, lon float64) (*en
 	if err != nil {
 		return nil, fmt.Errorf("weather API request failed: %w", err)
 	}
+	// 注意: ログには URL を含めない。OpenWeather の URL クエリには
+	// API キー (`appid=...`) が含まれるため、ログ流出すると認証情報漏洩リスクがある。
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
 			slog.Warn("failed to close weather response body", "error", cerr)
@@ -121,6 +123,8 @@ func (c *WeatherClient) FetchForecast(ctx context.Context, lat, lon float64) ([]
 	if err != nil {
 		return nil, fmt.Errorf("forecast API request failed: %w", err)
 	}
+	// 注意: ログには URL を含めない。OpenWeather の URL クエリには
+	// API キー (`appid=...`) が含まれるため、ログ流出すると認証情報漏洩リスクがある。
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
 			slog.Warn("failed to close forecast response body", "error", cerr)

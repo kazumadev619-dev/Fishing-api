@@ -63,6 +63,8 @@ func (c *MapsClient) SearchLocations(ctx context.Context, query string, limit in
 	if err != nil {
 		return nil, fmt.Errorf("maps API request failed: %w", err)
 	}
+	// 注意: ログには URL を含めない。Maps Geocoding API の URL クエリには
+	// API キー (`key=...`) が含まれるため、ログ流出すると認証情報漏洩リスクがある。
 	defer func() {
 		if cerr := resp.Body.Close(); cerr != nil {
 			slog.Warn("failed to close maps response body", "error", cerr)
