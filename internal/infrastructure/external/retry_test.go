@@ -35,6 +35,9 @@ func TestRetryTransport_RetryOn5xx(t *testing.T) {
 
 	client := newHTTPClient()
 	resp, err := client.Get(server.URL)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
 	// 4回試行（0+3retry）してすべて5xxならエラーを返す
 	assert.Error(t, err)
 	assert.Nil(t, resp)

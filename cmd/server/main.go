@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 
@@ -42,21 +43,26 @@ func (a *jwtManagerAdapter) ValidateRefreshToken(tokenStr string) (uuid.UUID, er
 }
 
 func main() {
+	if err := run(); err != nil {
+		slog.Error("server fatal error", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
 	cfg, err := config.Load()
 	if err != nil {
-		slog.Error("failed to load config", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("loading config: %w", err)
 	}
 
 	ctx := context.Background()
 
 	pool, err := infradb.NewPool(ctx, cfg.Database.URL)
 	if err != nil {
-		slog.Error("failed to connect to database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("connecting to database: %w", err)
 	}
 	defer pool.Close()
 
@@ -69,8 +75,7 @@ func main() {
 
 	cacheClient, err := cache.NewCacheClient(ctx, cfg.Redis.URL)
 	if err != nil {
-		slog.Error("failed to connect to redis", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("connecting to redis: %w", err)
 	}
 
 	// JWT
@@ -107,7 +112,7 @@ func main() {
 
 	slog.Info("server starting", "port", cfg.Server.Port)
 	if err := r.Run(":" + cfg.Server.Port); err != nil {
-		slog.Error("server failed", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("running server: %w", err)
 	}
+	return nil
 }

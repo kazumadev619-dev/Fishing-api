@@ -22,8 +22,7 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	t.Helper()
 	ctx := context.Background()
 
-	container, err := postgres.RunContainer(ctx,
-		testcontainers.WithImage("postgres:17"),
+	container, err := postgres.Run(ctx, "postgres:17",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("test"),
 		postgres.WithPassword("test"),
