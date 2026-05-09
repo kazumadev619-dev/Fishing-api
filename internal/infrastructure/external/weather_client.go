@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -57,7 +58,11 @@ func (c *WeatherClient) FetchCurrent(ctx context.Context, lat, lon float64) (*en
 	if err != nil {
 		return nil, fmt.Errorf("weather API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			slog.Warn("failed to close weather response body", "error", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("weather API returned status %d", resp.StatusCode)
@@ -116,7 +121,11 @@ func (c *WeatherClient) FetchForecast(ctx context.Context, lat, lon float64) ([]
 	if err != nil {
 		return nil, fmt.Errorf("forecast API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			slog.Warn("failed to close forecast response body", "error", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("forecast API returned status %d", resp.StatusCode)

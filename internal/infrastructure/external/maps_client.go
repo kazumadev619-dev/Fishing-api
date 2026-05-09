@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 
@@ -62,7 +63,11 @@ func (c *MapsClient) SearchLocations(ctx context.Context, query string, limit in
 	if err != nil {
 		return nil, fmt.Errorf("maps API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			slog.Warn("failed to close maps response body", "error", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("maps API returned status %d", resp.StatusCode)

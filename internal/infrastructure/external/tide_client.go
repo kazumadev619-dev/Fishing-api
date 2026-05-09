@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
 	_ "time/tzdata"
@@ -53,7 +54,11 @@ func (c *TideClient) FetchTideData(ctx context.Context, prefCode, portCode, date
 	if err != nil {
 		return nil, fmt.Errorf("tide API request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if cerr := resp.Body.Close(); cerr != nil {
+			slog.Warn("failed to close tide response body", "error", cerr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("tide API returned status %d", resp.StatusCode)

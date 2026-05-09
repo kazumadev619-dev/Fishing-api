@@ -43,7 +43,7 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 		}
 		if resp != nil {
 			io.Copy(io.Discard, resp.Body) //nolint:errcheck
-			resp.Body.Close()
+			resp.Body.Close()              //nolint:errcheck
 		}
 	}
 	return nil, lastErr
