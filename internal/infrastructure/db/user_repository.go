@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,7 +28,7 @@ func (r *userRepository) FindByEmail(ctx context.Context, email string) (*entity
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("finding user by email: %w", err)
 	}
 	return toUserEntity(row), nil
 }
@@ -38,7 +39,7 @@ func (r *userRepository) FindByID(ctx context.Context, id uuid.UUID) (*entity.Us
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("finding user by id: %w", err)
 	}
 	return toUserEntity(row), nil
 }
@@ -61,7 +62,7 @@ func (r *userRepository) Create(ctx context.Context, user *entity.User) (*entity
 		IsSsoUser:    user.IsSSO,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating user: %w", err)
 	}
 	return toUserEntity(row), nil
 }
@@ -72,7 +73,7 @@ func (r *userRepository) UpdateEmailVerified(ctx context.Context, id uuid.UUID, 
 		EmailVerifiedAt: sql.NullTime{Time: verifiedAt, Valid: true},
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("updating user email verified: %w", err)
 	}
 	return toUserEntity(row), nil
 }

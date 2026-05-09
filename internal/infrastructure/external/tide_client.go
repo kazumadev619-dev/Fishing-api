@@ -105,7 +105,7 @@ func (c *TideClient) FetchTideData(ctx context.Context, prefCode, portCode, date
 func parseTimeOnDate(base time.Time, timeStr string, loc *time.Location) (time.Time, error) {
 	t, err := time.ParseInLocation("15:04", timeStr, loc)
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("parsing tide time %q: %w", timeStr, err)
 	}
 	return time.Date(base.Year(), base.Month(), base.Day(), t.Hour(), t.Minute(), 0, 0, loc), nil
 }

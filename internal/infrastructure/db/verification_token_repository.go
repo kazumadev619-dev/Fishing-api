@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 
 	sqlcgen "github.com/kazumadev619-dev/fishing-api/db/generated"
 	domain "github.com/kazumadev619-dev/fishing-api/internal/domain"
@@ -27,7 +28,7 @@ func (r *verificationTokenRepository) Create(ctx context.Context, token *entity.
 		ExpiresAt: token.ExpiresAt,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating verification token: %w", err)
 	}
 	return &entity.VerificationToken{
 		ID:        row.ID,
@@ -44,7 +45,7 @@ func (r *verificationTokenRepository) FindByToken(ctx context.Context, token str
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
-		return nil, err
+		return nil, fmt.Errorf("finding verification token: %w", err)
 	}
 	return &entity.VerificationToken{
 		ID:        row.ID,
@@ -56,5 +57,8 @@ func (r *verificationTokenRepository) FindByToken(ctx context.Context, token str
 }
 
 func (r *verificationTokenRepository) DeleteByEmail(ctx context.Context, email string) error {
-	return r.queries.DeleteVerificationTokensByEmail(ctx, email)
+	if err := r.queries.DeleteVerificationTokensByEmail(ctx, email); err != nil {
+		return fmt.Errorf("deleting verification tokens by email: %w", err)
+	}
+	return nil
 }

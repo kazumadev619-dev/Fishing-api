@@ -144,7 +144,10 @@ func (a *AuthUsecase) VerifyEmail(ctx context.Context, token string) error {
 
 	// 冪等性: 既に確認済みの場合はUPDATEをスキップ
 	if user.EmailVerifiedAt != nil {
-		return a.tokenRepo.DeleteByEmail(ctx, vToken.Email)
+		if err := a.tokenRepo.DeleteByEmail(ctx, vToken.Email); err != nil {
+			return fmt.Errorf("verify email: deleting tokens: %w", err)
+		}
+		return nil
 	}
 
 	now := time.Now()
@@ -152,7 +155,10 @@ func (a *AuthUsecase) VerifyEmail(ctx context.Context, token string) error {
 		return fmt.Errorf("verify email: updating verified at: %w", err)
 	}
 
-	return a.tokenRepo.DeleteByEmail(ctx, vToken.Email)
+	if err := a.tokenRepo.DeleteByEmail(ctx, vToken.Email); err != nil {
+		return fmt.Errorf("verify email: deleting tokens: %w", err)
+	}
+	return nil
 }
 
 func (a *AuthUsecase) sendVerificationEmail(ctx context.Context, email string) error {
@@ -177,7 +183,10 @@ func (a *AuthUsecase) sendVerificationEmail(ctx context.Context, email string) e
 		return fmt.Errorf("send verification email: storing token: %w", err)
 	}
 
-	return a.emailSender.SendVerificationEmail(email, tokenStr, a.appBaseURL)
+	if err := a.emailSender.SendVerificationEmail(email, tokenStr, a.appBaseURL); err != nil {
+		return fmt.Errorf("send verification email: sending email: %w", err)
+	}
+	return nil
 }
 
 func (a *AuthUsecase) generateTokenPair(userID uuid.UUID) (*TokenPair, error) {

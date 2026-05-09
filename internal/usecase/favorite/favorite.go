@@ -22,7 +22,11 @@ func NewFavoriteUsecase(repo repository.FavoriteRepository) *FavoriteUsecase {
 
 // GetList はユーザーのお気に入り場所一覧を返す。
 func (u *FavoriteUsecase) GetList(ctx context.Context, userID uuid.UUID) ([]*entity.Location, error) {
-	return u.repo.FindByUserID(ctx, userID)
+	locations, err := u.repo.FindByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("listing favorites: %w", err)
+	}
+	return locations, nil
 }
 
 // Add はお気に入りを追加する。既に登録済みの場合は ErrAlreadyExists を返す。
