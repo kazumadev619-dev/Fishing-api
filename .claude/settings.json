@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'FILE=$(cat | jq -r \".file_path // .path // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"\\.go$\"; then gofumpt -w \"$FILE\" 2>/dev/null || true; golangci-lint run --fast --fix \"$FILE\" 2>/dev/null || true; fi'"
+            "command": "bash -c 'INPUT=$(cat); FILE=$(printf %s \"$INPUT\" | jq -r \".tool_input.file_path // .file_path // .path // empty\" 2>/dev/null); case \"$FILE\" in *.go) ;; *) exit 0;; esac; gofumpt -w \"$FILE\" >/dev/null 2>&1 || true; OUT=$(golangci-lint run --fast-only --fix \"$FILE\" 2>&1); RC=$?; if [ $RC -ne 0 ] && printf %s \"$OUT\" | grep -qE \":[0-9]+:[0-9]+:\"; then jq -nc --arg ctx \"golangci-lint reports unresolved issues in $FILE after --fix:\\n$OUT\" '\\''{hookSpecificOutput:{hookEventName:\"PostToolUse\",additionalContext:$ctx}}'\\''; fi; exit 0'"
           }
         ]
       }
@@ -20,7 +20,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'FILE=$(cat | jq -r \".file_path // .path // empty\" 2>/dev/null); if echo \"$FILE\" | grep -qE \"(\\.golangci\\.ya?ml|cspell\\.json|\\.markdownlint\\.json)$\"; then echo \"BLOCKED: リンター設定ファイルは直接編集禁止。コードを修正してリンターエラーを解消してください。\"; exit 2; fi'"
+            "command": "bash -c 'INPUT=$(cat); FILE=$(printf %s \"$INPUT\" | jq -r \".tool_input.file_path // .file_path // .path // empty\" 2>/dev/null); case \"$FILE\" in *.golangci.yml|*.golangci.yaml|*cspell.json|*.markdownlint.json) printf \"BLOCKED: リンター設定ファイルは直接編集禁止。コードを修正してリンターエラーを解消してください。\\n\" >&2; exit 2;; esac; if printf %s \"$FILE\" | grep -qE '\\''(^|/)\\.env($|\\.)|(^|/)\\.envrc$|\\.(key|pem|p12|pfx)$|(^|/)kubeconfig$|(^|/)id_(rsa|ed25519|ecdsa|dsa)([^/]*)?$|(^|/)credentials\\.json$|(^|/)service-account\\.json$|(^|/)\\.aws/credentials$'\\''; then printf \"BLOCKED: secret/credential file edits forbidden (%s)\\n\" \"$FILE\" >&2; exit 2; fi; exit 0'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'INPUT=$(cat); CMD=$(printf %s \"$INPUT\" | jq -r \".tool_input.command // empty\" 2>/dev/null); if printf %s \"$CMD\" | grep -qE '\\''rm[[:space:]]+(-[rf]{1,2}|-r[[:space:]]+-f|-f[[:space:]]+-r)([[:space:]]+--)?[[:space:]]+(/|~|\\*)'\\''; then printf \"BLOCKED: destructive rm at filesystem root\\n\" >&2; exit 2; fi; if printf %s \"$CMD\" | grep -qE '\\''git[[:space:]]+push.*((--force[[:space:]]|--force$|-f[[:space:]]|-f$).*(main|master)([[:space:]]|$)|(main|master)[[:space:]].*(--force[[:space:]]|--force$|-f[[:space:]]|-f$))'\\''; then printf \"BLOCKED: force-push to main/master\\n\" >&2; exit 2; fi; if printf %s \"$CMD\" | grep -qE '\\''(^|[[:space:]])--no-verify([[:space:]]|$)'\\''; then printf \"BLOCKED: git hook bypass flag forbidden\\n\" >&2; exit 2; fi; exit 0'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'ROOT=$(git rev-parse --show-toplevel 2>/dev/null); if [ -z \"$ROOT\" ] || ! cd \"$ROOT\" 2>/dev/null; then exit 0; fi; OUT=$( { go build ./... && go test ./... -short -count=1; } 2>&1); RC=$?; OUT=\"${OUT:0:4000}\"; if [ $RC -ne 0 ]; then jq -nc --arg ctx \"Stop hook: build/test failed (truncated to 4KB):\\n$OUT\" '\\''{hookSpecificOutput:{hookEventName:\"Stop\",additionalContext:$ctx}}'\\''; fi; exit 0'"
           }
         ]
       }
