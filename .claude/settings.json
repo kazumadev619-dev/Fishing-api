@@ -9,7 +9,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -c 'FILE=$(cat | jq -r \".file_path // .path // empty\" 2>/dev/null); if [ -n \"$FILE\" ] && echo \"$FILE\" | grep -q \"\\.go$\"; then gofumpt -w \"$FILE\" 2>/dev/null || true; golangci-lint run --fast --fix \"$FILE\" 2>/dev/null || true; fi'"
+            "command": "bash -c 'INPUT=$(cat); FILE=$(echo \"$INPUT\" | jq -r \".tool_input.file_path // .file_path // .path // empty\" 2>/dev/null); if [ -z \"$FILE\" ] || ! echo \"$FILE\" | grep -q \"\\.go$\"; then exit 0; fi; gofumpt -w \"$FILE\" >/dev/null 2>&1 || true; golangci-lint run --fast-only --fix \"$FILE\" >/dev/null 2>&1 || true; REMAINING=$(golangci-lint run --fast-only \"$FILE\" 2>&1 || true); if [ -n \"$REMAINING\" ] && echo \"$REMAINING\" | grep -qE \":[0-9]+:[0-9]+:\"; then jq -nc --arg ctx \"golangci-lint reports unresolved issues in $FILE after --fix:\\n$REMAINING\" '\\''{hookSpecificOutput:{hookEventName:\"PostToolUse\",additionalContext:$ctx}}'\\''; fi; exit 0'"
           }
         ]
       }
@@ -21,6 +21,30 @@
           {
             "type": "command",
             "command": "bash -c 'FILE=$(cat | jq -r \".file_path // .path // empty\" 2>/dev/null); if echo \"$FILE\" | grep -qE \"(\\.golangci\\.ya?ml|cspell\\.json|\\.markdownlint\\.json)$\"; then echo \"BLOCKED: リンター設定ファイルは直接編集禁止。コードを修正してリンターエラーを解消してください。\"; exit 2; fi'"
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'INPUT=$(cat); FILE=$(echo \"$INPUT\" | jq -r \".tool_input.file_path // .file_path // .path // empty\"); if echo \"$FILE\" | grep -qE \"(^|/)\\.env($|\\.)|\\.key$|kubeconfig$|_rsa$\"; then echo \"BLOCKED: secret/credential file edits forbidden ($FILE)\" >&2; exit 2; fi; exit 0'"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'CMD=$(cat | jq -r \".tool_input.command // empty\"); if echo \"$CMD\" | grep -qE \"rm[[:space:]]+-rf?[[:space:]]+(/|~|\\*)\"; then echo \"BLOCKED: destructive rm -rf root\" >&2; exit 2; fi; if echo \"$CMD\" | grep -qE \"git[[:space:]]+push.*--force.*(main|master)|git[[:space:]]+push.*(main|master).*--force\"; then echo \"BLOCKED: force-push to main/master\" >&2; exit 2; fi; if echo \"$CMD\" | grep -qE \"--no-verify\\b\"; then echo \"BLOCKED: --no-verify forbidden\" >&2; exit 2; fi; exit 0'"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd /Users/nosawakazuma/Project/Fishing-api && OUT=$( { go build ./... && go test ./... -short -count=1; } 2>&1); RC=$?; OUT=\"${OUT:0:4000}\"; if [ $RC -ne 0 ]; then jq -nc --arg ctx \"Stop hook: build/test failed (truncated to 4KB):\\n$OUT\" '\\''{hookSpecificOutput:{hookEventName:\"Stop\",additionalContext:$ctx}}'\\''; fi; exit 0'"
           }
         ]
       }
