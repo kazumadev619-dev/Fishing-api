@@ -112,4 +112,4 @@ config.AllowOrigins = []string{os.Getenv("FRONTEND_ORIGIN")}
 ## 関連ルール
 
 - [sqlc.md](./sqlc.md) — SQL インジェクション防止の詳細
-- [code-review.md](./code-review.md) — セキュリティレビューのチェックリスト
+- [workflow.md](./workflow.md) — セキュリティレビューのチェックリスト・トリガー

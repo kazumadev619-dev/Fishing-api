@@ -10,9 +10,14 @@
 | 言語 | Go 1.26 |
 | フレームワーク | Gin v1.12 |
 | DB | PostgreSQL 17（Neon マネージドクラウド） |
+| DB アクセス | sqlc + pgx/v5（接続文字列に `sslmode=require` 必須） |
 | キャッシュ | Redis 7（k3s Pod + ClusterIP Service） |
+| 認証 | JWT（15分）+ Refresh Token（7日）+ Google OAuth |
 | デプロイ先 | Raspberry Pi 5 + k3s + Cloudflare Tunnel |
+| CI/CD | GitHub Actions → GHCR（linux/arm64）→ kubectl rolling deploy |
 | ドメイン | `fishing.kazuma-lab.com` |
+
+> 主要な設計判断（Neon 採用 / Redis on k3s / ビッグバン移行 / sqlc+pgx / クリーンアーキテクチャ）の経緯は [`docs/adr/`](docs/adr/) を参照。
 
 ## API エンドポイント
 
@@ -108,9 +113,20 @@ make docker-down # DB・Redis 停止
 make build       # バイナリビルド（./bin/server）
 ```
 
+## テスト方針
+
+| レイヤー | 手法 | ツール |
+|---------|------|--------|
+| usecase | モックリポジトリ | `testify/mock` |
+| infrastructure/db | 実 PostgreSQL コンテナ（Neon 非依存） | `testcontainers-go` |
+| interface/handler | ルーター統合テスト | `httptest` + Gin |
+
+詳細は [`.claude/rules/testing.md`](.claude/rules/testing.md) を参照。
+
 ## ドキュメント
 
 - [設計ドキュメント](docs/superpowers/specs/2026-04-07-go-backend-design.md)
+- [アーキテクチャ決定記録（ADR）](docs/adr/)
 - [開発コントリビューションガイド](CONTRIBUTING.md)
 - [Phase 0: リポジトリ整備](docs/superpowers/plans/2026-04-07-go-backend-phase0-repo-setup.md)
 - [Phase 1: 基盤構築](docs/superpowers/plans/2026-04-07-go-backend-phase1-foundation.md)
