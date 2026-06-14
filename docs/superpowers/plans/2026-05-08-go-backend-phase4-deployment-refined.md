@@ -78,6 +78,7 @@ tests/
 bin/
 cov.out
 coverage.out
+coverage.filtered.out
 ```
 
 - [ ] **Step 2: Dockerfile を作成する**
@@ -205,16 +206,14 @@ jobs:
 
       # infrastructure/db は testcontainers-go を使うため Docker が必要。
       # GitHub Actions の ubuntu-latest には Docker が同梱されているのだ。
-      - name: Run tests with coverage
+      # テスト実行 + カバレッジゲートは Makefile の `cover` ターゲットに一本化する。
+      # `make cover` は sqlc 生成コード（db/generated, 0%）を除外して 80% を判定する
+      # （rules/sqlc.md で db/generated は編集禁止＝テスト対象外のため。issue #18）。
+      - name: Run tests with coverage gate (>= 80%, excludes db/generated)
         env:
           JWT_ACCESS_SECRET: test-access-secret-32chars-minimum
           JWT_REFRESH_SECRET: test-refresh-secret-32chars-minimum
-        run: go test -coverprofile=coverage.out ./...
-
-      - name: Enforce coverage gate (>= 80%)
-        run: |
-          COV=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | tr -d %)
-          awk -v c="$COV" 'BEGIN{exit !(c+0<80)}' && { echo "coverage $COV% < 80%"; exit 1; } || echo "coverage $COV% OK"
+        run: make cover
 
       - name: Build
         run: go build ./...
@@ -236,7 +235,9 @@ jobs:
           version: latest
 ```
 
-> **カバレッジゲートの読み方:** `awk 'BEGIN{exit !(c+0<80)}'` は「カバレッジが 80 未満なら exit 0（=真）」を返す。`&&` 側で `exit 1`（fail）し、80 以上なら `||` 側で `OK` を出力する。`c+0` で文字列を数値強制しているのだ。
+> **カバレッジゲートの読み方:** ゲートロジックは `Makefile` の `cover` ターゲットに集約してある（CI とローカルで二重定義しない）。`cover` は `coverage.out` から `grep -v "db/generated"` で生成コードを除外した `coverage.filtered.out` を作り、その総計が 80% 未満なら fail する。判定の `awk 'BEGIN{exit !(c+0<80)}'` は「カバレッジが 80 未満なら exit 0（=真）」を返し、`&&` 側で `exit 1`（fail）、80 以上なら `||` 側で `OK` を出力する。`c+0` で文字列を数値強制しているのだ。
+>
+> **なぜ生成コードを除外するか（issue #18）:** 生の `coverage.out` 全体だと sqlc 生成コード（`db/generated`, 0%）が押し下げて全体 76.5% で fail してしまう。実質コード（生成コード除外）のカバレッジは 83.5% で 80% を満たすため、`rules/sqlc.md` で編集禁止＝テスト対象外とされている `db/generated` を計測から外すのが正しい。`cmd/server`（DI/main, 0%）は除外しなくても 83.5% で通過するため現状は除外しない。
 
 - [ ] **Step 2: `.golangci.yml` が存在することを確認する**
 
@@ -347,7 +348,7 @@ git commit -m "🚀 ci: デプロイワークフロー追加（GHCR → k3s → 
 - [ ] `Dockerfile` のビルドステージが `golang:1.26-alpine` を使用している
 - [ ] `docker buildx build --platform linux/arm64` でビルドが通る
 - [ ] CI の `setup-go` が `go-version: '1.26'`（ci.yml / sync-schema.yml すべて）
-- [ ] CI に `coverage.out` を用いたカバレッジゲートがあり、80% 未満で fail する
+- [ ] CI が `make cover`（生成コード `db/generated` 除外）でカバレッジゲートを判定し、80% 未満で fail する
 - [ ] GitHub Actions CIが全テストPASS（カバレッジ 80%+ を含む）
 - [ ] mainへのpushでGHCRにARM64イメージがpushされる
 - [ ] k3s上で全Podが `Running` 状態
