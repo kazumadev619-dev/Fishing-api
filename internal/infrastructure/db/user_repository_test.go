@@ -95,3 +95,14 @@ func TestUserRepository_UpdateEmailVerified(t *testing.T) {
 	require.NotNil(t, refetched.EmailVerifiedAt)
 	assert.WithinDuration(t, verifiedAt, *refetched.EmailVerifiedAt, time.Second)
 }
+
+func TestUserRepository_UpdateEmailVerified_NotFound(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	repo := NewUserRepository(db)
+
+	_, err := repo.UpdateEmailVerified(ctx, uuid.New(), time.Now().UTC())
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
