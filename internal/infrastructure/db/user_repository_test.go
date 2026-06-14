@@ -2,59 +2,15 @@ package db
 
 import (
 	"context"
-	"database/sql"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
 )
-
-func setupTestDB(t *testing.T) (*sql.DB, func()) {
-	t.Helper()
-	ctx := context.Background()
-
-	container, err := postgres.Run(ctx, "postgres:17",
-		postgres.WithDatabase("testdb"),
-		postgres.WithUsername("test"),
-		postgres.WithPassword("test"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(30*time.Second),
-		),
-	)
-	require.NoError(t, err)
-
-	connStr, err := container.ConnectionString(ctx, "sslmode=disable")
-	require.NoError(t, err)
-
-	pool, err := NewPool(ctx, connStr)
-	require.NoError(t, err)
-
-	db := stdlib.OpenDBFromPool(pool)
-
-	// Apply schema
-	schema, err := os.ReadFile("../../../db/schema.sql")
-	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, string(schema))
-	require.NoError(t, err)
-
-	return db, func() {
-		db.Close()
-		if err := container.Terminate(ctx); err != nil {
-			t.Logf("failed to terminate test container: %v", err)
-		}
-	}
-}
 
 func TestUserRepository_CreateAndFind(t *testing.T) {
 	db, cleanup := setupTestDB(t)
@@ -96,4 +52,46 @@ func TestUserRepository_FindByEmail_NotFound(t *testing.T) {
 
 	_, err := repo.FindByEmail(ctx, "nonexistent@example.com")
 	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+func TestUserRepository_FindByID_NotFound(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	repo := NewUserRepository(db)
+
+	_, err := repo.FindByID(ctx, uuid.New())
+	assert.ErrorIs(t, err, domain.ErrNotFound)
+}
+
+func TestUserRepository_UpdateEmailVerified(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	repo := NewUserRepository(db)
+
+	hash := "hashed-password"
+	user := &entity.User{
+		ID:           uuid.New(),
+		Email:        "verify-" + uuid.New().String() + "@example.com",
+		PasswordHash: &hash,
+		IsSSO:        false,
+	}
+
+	created, err := repo.Create(ctx, user)
+	require.NoError(t, err)
+	require.Nil(t, created.EmailVerifiedAt, "新規作成時は未認証 (email_verified_at = NULL) のはず")
+
+	verifiedAt := time.Now().UTC()
+	updated, err := repo.UpdateEmailVerified(ctx, created.ID, verifiedAt)
+	require.NoError(t, err)
+	require.NotNil(t, updated.EmailVerifiedAt)
+
+	// Refetch して永続化されていることを確認するのだ。
+	refetched, err := repo.FindByID(ctx, created.ID)
+	require.NoError(t, err)
+	require.NotNil(t, refetched.EmailVerifiedAt)
+	assert.WithinDuration(t, verifiedAt, *refetched.EmailVerifiedAt, time.Second)
 }
