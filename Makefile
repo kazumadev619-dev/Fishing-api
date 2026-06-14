@@ -1,4 +1,4 @@
-.PHONY: run build test lint sqlc-gen redis-up redis-down
+.PHONY: run build test test-short cover lint sqlc-gen redis-up redis-down
 
 run:
 	go run ./cmd/server
@@ -11,6 +11,15 @@ test:
 
 test-short:
 	go test ./... -short -v
+
+# cover: 全体カバレッジを計測し 80% 未満なら fail する。
+# sqlc 生成コード（db/generated）はテスト対象外（rules/sqlc.md）のため計測から除外する。
+cover:
+	go test ./... -coverprofile=coverage.out -covermode=atomic
+	@grep -v "db/generated" coverage.out > coverage.filtered.out
+	@go tool cover -func=coverage.filtered.out | tail -1
+	@COV=$$(go tool cover -func=coverage.filtered.out | tail -1 | awk '{print $$3}' | tr -d %); \
+		awk -v c="$$COV" 'BEGIN{exit !(c+0<80)}' && { echo "coverage $$COV% < 80%"; exit 1; } || echo "coverage $$COV% OK (>= 80%)"
 
 lint:
 	golangci-lint run
