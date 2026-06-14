@@ -34,7 +34,11 @@ func (m *Manager) GenerateAccessToken(userID uuid.UUID) (string, error) {
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(m.accessSecret))
+	signed, err := token.SignedString([]byte(m.accessSecret))
+	if err != nil {
+		return "", fmt.Errorf("signing access token: %w", err)
+	}
+	return signed, nil
 }
 
 func (m *Manager) GenerateRefreshToken(userID uuid.UUID) (string, error) {
@@ -46,7 +50,11 @@ func (m *Manager) GenerateRefreshToken(userID uuid.UUID) (string, error) {
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(m.refreshSecret))
+	signed, err := token.SignedString([]byte(m.refreshSecret))
+	if err != nil {
+		return "", fmt.Errorf("signing refresh token: %w", err)
+	}
+	return signed, nil
 }
 
 func (m *Manager) ValidateAccessToken(tokenStr string) (*Claims, error) {
@@ -65,7 +73,7 @@ func (m *Manager) validateToken(tokenStr, secret string) (*Claims, error) {
 		return []byte(secret), nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parsing token: %w", err)
 	}
 
 	claims, ok := token.Claims.(*Claims)

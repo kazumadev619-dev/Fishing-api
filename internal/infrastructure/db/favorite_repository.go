@@ -62,10 +62,14 @@ func (r *favoriteRepository) Delete(ctx context.Context, userID uuid.UUID, locat
 }
 
 func (r *favoriteRepository) Exists(ctx context.Context, userID uuid.UUID, locationID uuid.UUID) (bool, error) {
-	return r.queries.FavoriteExists(ctx, sqlcgen.FavoriteExistsParams{
+	exists, err := r.queries.FavoriteExists(ctx, sqlcgen.FavoriteExistsParams{
 		UserID:     userID,
 		LocationID: locationID,
 	})
+	if err != nil {
+		return false, fmt.Errorf("checking favorite existence: %w", err)
+	}
+	return exists, nil
 }
 
 func toLocationEntity(row sqlcgen.Location) *entity.Location {

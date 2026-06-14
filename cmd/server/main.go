@@ -27,17 +27,25 @@ import (
 type jwtManagerAdapter struct{ m *jwtutil.Manager }
 
 func (a *jwtManagerAdapter) GenerateAccessToken(userID uuid.UUID) (string, error) {
-	return a.m.GenerateAccessToken(userID)
+	token, err := a.m.GenerateAccessToken(userID)
+	if err != nil {
+		return "", fmt.Errorf("adapter: generate access token: %w", err)
+	}
+	return token, nil
 }
 
 func (a *jwtManagerAdapter) GenerateRefreshToken(userID uuid.UUID) (string, error) {
-	return a.m.GenerateRefreshToken(userID)
+	token, err := a.m.GenerateRefreshToken(userID)
+	if err != nil {
+		return "", fmt.Errorf("adapter: generate refresh token: %w", err)
+	}
+	return token, nil
 }
 
 func (a *jwtManagerAdapter) ValidateRefreshToken(tokenStr string) (uuid.UUID, error) {
 	claims, err := a.m.ValidateRefreshToken(tokenStr)
 	if err != nil {
-		return uuid.Nil, err
+		return uuid.Nil, fmt.Errorf("validating refresh token: %w", err)
 	}
 	return claims.UserID, nil
 }

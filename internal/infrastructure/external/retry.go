@@ -23,13 +23,13 @@ func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	var lastErr error
 	for i := 0; i <= t.maxRetries; i++ {
 		if err := req.Context().Err(); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("request context canceled: %w", err)
 		}
 		if i > 0 {
 			select {
 			case <-time.After(time.Duration(i) * 500 * time.Millisecond):
 			case <-req.Context().Done():
-				return nil, req.Context().Err()
+				return nil, fmt.Errorf("request context canceled during backoff: %w", req.Context().Err())
 			}
 		}
 		resp, err := t.base.RoundTrip(req)
