@@ -73,6 +73,9 @@ func (r *userRepository) UpdateEmailVerified(ctx context.Context, id uuid.UUID, 
 		EmailVerifiedAt: sql.NullTime{Time: verifiedAt, Valid: true},
 	})
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
 		return nil, fmt.Errorf("updating user email verified: %w", err)
 	}
 	return toUserEntity(row), nil
