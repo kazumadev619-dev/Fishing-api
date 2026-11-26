@@ -21,7 +21,7 @@ Go から PostgreSQL（Neon、[ADR 0001](0001-database-provider-neon.md)）に�
 ルール:
 - SQL は sqlc 管理クエリのみ使用し、文字列連結・`fmt.Sprintf` による SQL 構築は禁止（SQL インジェクション防止）
 - `db/queries/` のみ手動編集し、`db/generated/` は編集禁止（再生成で上書き）
-- `db/schema.sql` は `Fishing-database` リポジトリから CI 自動同期（手動編集禁止）
+- ~~`db/schema.sql` は `Fishing-database` リポジトリから CI 自動同期（手動編集禁止）~~ → [ADR 0007](0007-schema-ownership-goose.md) で改めた（`Fishing-database` は存在しない。スキーマの正は Phase 4 で Go 側の goose に移す）
 - N+1 を避け、JOIN で一括取得する
 
 ## Positive Consequences
@@ -43,4 +43,5 @@ Go から PostgreSQL（Neon、[ADR 0001](0001-database-provider-neon.md)）に�
 - sqlc / DB 管理ルール: [`.claude/rules/sqlc.md`](../../.claude/rules/sqlc.md)
 - セキュリティルール: [`.claude/rules/security.md`](../../.claude/rules/security.md)（SQL インジェクション防止）
 - 設定: `sqlc.yaml`、クエリ: `db/queries/`、生成コード: `db/generated/`
+- スキーマの正: [ADR 0007 — スキーマの正を Go 側に移し、goose で管理する](0007-schema-ownership-goose.md)
 - 関連: [ADR 0001 — DB プロバイダ Neon](0001-database-provider-neon.md)

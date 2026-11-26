@@ -12,12 +12,12 @@
 | DB | PostgreSQL 17（Neon マネージドクラウド） |
 | DB アクセス | sqlc + pgx/v5（接続文字列に `sslmode=require` 必須） |
 | キャッシュ | Redis 7（k3s Pod + ClusterIP Service） |
-| 認証 | JWT（15分）+ Refresh Token（7日）+ Google OAuth |
+| 認証 | 移行の最後の段までは Next（Auth.js）が持つ。Next から Go へは署名した短命の内部トークンで user.id を渡す（[ADR 0006](docs/adr/0006-incremental-migration-via-nextjs-bff.md)）。Go の JWT・登録・ログインは最後の段で作り直す |
 | デプロイ先 | Raspberry Pi 5 + k3s + Cloudflare Tunnel |
 | CI/CD | GitHub Actions → GHCR（linux/arm64）→ kubectl rolling deploy |
 | ドメイン | `fishing.kazuma-lab.com` |
 
-> 主要な設計判断（Neon 採用 / Redis on k3s / ビッグバン移行 / sqlc+pgx / クリーンアーキテクチャ）の経緯は [`docs/adr/`](docs/adr/) を参照。
+> 主要な設計判断（Neon 採用 / Redis on k3s / sqlc+pgx / クリーンアーキテクチャ / Next を BFF にした段階移行 / スキーマの正と goose）の経緯は [`docs/adr/`](docs/adr/) を参照。
 
 ## API エンドポイント
 
@@ -77,7 +77,7 @@ k8s/               Kubernetes マニフェスト
 - **PostgreSQL**: Neon（マネージドクラウド）
 - **Redis**: k3s Pod（ClusterIP Service）— キャッシュ用途のみなのでデータ消失時は再取得で対応
 - **アプリ**: k3s Pod
-- **ルーティング**: Traefik Ingress（`/api/*` → Go, `/*` → Next.js）
+- **ルーティング**: Traefik Ingress は `/*` → Next.js のまま。Next の Route Handler と `/dashboard` が Go を呼ぶ（Next が BFF。[ADR 0006](docs/adr/0006-incremental-migration-via-nextjs-bff.md)）
 - **フロントエンド → バックエンド通信**: ブラウザからは Cloudflare 経由、Next.js SSR からは ClusterIP 直通（`fishing-api-service:8080`）
 
 ## ローカル開発

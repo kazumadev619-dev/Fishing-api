@@ -14,6 +14,6 @@ Go バックエンド for [FishingConditionsApp](https://github.com/kazumadev619
 
 ## 禁止事項
 
-- `db/schema.sql` を直接編集しない（`Fishing-database` リポジトリから CI 自動同期）
+- `db/schema.sql` は本番（FishingConditionsApp の Prisma の migration）に合わせるときだけ直す。Phase 4 でスキーマの正を Go 側の goose に移す（[ADR 0007](./docs/adr/0007-schema-ownership-goose.md)）
 - `db/generated/` を編集しない（`make sqlc-gen` で再生成）
 - `.env` をコミットしない（シークレットは環境変数のみ）

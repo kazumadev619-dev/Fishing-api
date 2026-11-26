@@ -6,7 +6,7 @@
 
 ```
 db/
-├── schema.sql        # 手動編集禁止（CI 自動同期）
+├── schema.sql        # 本番に合わせるときだけ直す（ADR 0007）
 ├── queries/          # ← ここだけ手動編集する
 │   ├── user.sql
 │   ├── favorite.sql
@@ -24,11 +24,10 @@ db/
 
 ## スキーマ管理
 
-`db/schema.sql` は **手動編集禁止**。
+スキーマの正は [ADR 0007](../../docs/adr/0007-schema-ownership-goose.md) に従う。
 
-- `Fishing-database` リポジトリで管理
-- GitHub Actions (`sync-schema.yml`) が自動同期 → PR 自動作成
-- スキーマ変更は `Fishing-database` リポジトリ側で行う
+- Phase 4 まで: 本番の形は FishingConditionsApp の `prisma/migrations` が決める。`db/schema.sql` は、本番に合わせるときだけ手で直す（同期の仕組みは無い）
+- Phase 4 以降: スキーマの正は Go 側の goose の migration（SQL ファイル、バイナリに埋め込み）。スキーマを変えるときは migration を足す。Prisma の migration は止め、`schema.prisma` は `prisma db pull` で追従させる
 
 ## sqlc クエリ記述ルール
 
