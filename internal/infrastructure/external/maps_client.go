@@ -2,9 +2,7 @@ package external
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"net/url"
 
@@ -14,19 +12,19 @@ import (
 type MapsClient struct {
 	apiKey  string
 	baseURL string
-	client  *http.Client
+	fetch   *fetcher
 }
 
 func NewMapsClient(apiKey string) *MapsClient {
 	return &MapsClient{
 		apiKey:  apiKey,
 		baseURL: "https://maps.googleapis.com",
-		client:  newHTTPClient(),
+		fetch:   newFetcher(&http.Client{}),
 	}
 }
 
 func newMapsClientWithHTTPClient(apiKey, baseURL string, httpClient *http.Client) *MapsClient {
-	return &MapsClient{apiKey: apiKey, baseURL: baseURL, client: httpClient}
+	return &MapsClient{apiKey: apiKey, baseURL: baseURL, fetch: newFetcher(httpClient)}
 }
 
 type geocodeResponse struct {
@@ -55,29 +53,10 @@ func (c *MapsClient) SearchLocations(ctx context.Context, query string, limit in
 
 	apiURL := fmt.Sprintf("%s/maps/api/geocode/json?%s", c.baseURL, params.Encode())
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating maps request: %w", err)
-	}
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("maps API request failed: %w", err)
-	}
-	// 注意: ログには URL を含めない。Maps Geocoding API の URL クエリには
-	// API キー (`key=...`) が含まれるため、ログ流出すると認証情報漏洩リスクがある。
-	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
-			slog.Warn("failed to close maps response body", "error", cerr)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("maps API returned status %d", resp.StatusCode)
-	}
-
+	// 注意: URL には API キー (`key=...`) が入るので、ログにもエラーにも含めない（getJSON が外す）。
 	var data geocodeResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode maps response: %w", err)
+	if err := c.fetch.getJSON(ctx, apiURL, &data); err != nil {
+		return nil, fmt.Errorf("maps API: %w", err)
 	}
 
 	if data.Status != "OK" && data.Status != "ZERO_RESULTS" {

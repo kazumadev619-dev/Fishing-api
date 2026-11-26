@@ -4,158 +4,151 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 
+	"github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 )
 
+// WeatherClient は OpenWeatherMap（2.5）のクライアント。
 type WeatherClient struct {
 	apiKey  string
 	baseURL string
-	client  *http.Client
+	fetch   *fetcher
 }
 
 func NewWeatherClient(apiKey string) *WeatherClient {
-	return &WeatherClient{
-		apiKey:  apiKey,
-		baseURL: "https://api.openweathermap.org",
-		client:  newHTTPClient(),
-	}
+	return newWeatherClientWithHTTPClient(apiKey, "https://api.openweathermap.org", &http.Client{})
 }
 
 func newWeatherClientWithHTTPClient(apiKey, baseURL string, httpClient *http.Client) *WeatherClient {
-	return &WeatherClient{apiKey: apiKey, baseURL: baseURL, client: httpClient}
+	return &WeatherClient{apiKey: apiKey, baseURL: baseURL, fetch: newFetcher(httpClient)}
 }
 
+// owmCurrentResponse は /data/2.5/weather の応答。形は testdata/owm_current.json を正とする。
+// 風速と気圧はスコアに使うので、欠け・null を見分けられるようポインタで受ける。
 type owmCurrentResponse struct {
-	Main struct {
-		Temp      float64 `json:"temp"`
-		FeelsLike float64 `json:"feels_like"`
-		Pressure  float64 `json:"pressure"`
-		Humidity  int     `json:"humidity"`
-	} `json:"main"`
-	Wind struct {
-		Speed float64 `json:"speed"`
-		Deg   int     `json:"deg"`
-	} `json:"wind"`
+	Coord struct {
+		Lat float64 `json:"lat"`
+		Lon float64 `json:"lon"`
+	} `json:"coord"`
 	Weather []struct {
+		ID          int    `json:"id"`
+		Main        string `json:"main"`
 		Description string `json:"description"`
+		Icon        string `json:"icon"`
 	} `json:"weather"`
-	Dt int64 `json:"dt"`
+	Main *struct {
+		Temp      float64  `json:"temp"`
+		FeelsLike float64  `json:"feels_like"`
+		TempMin   *float64 `json:"temp_min"`
+		TempMax   *float64 `json:"temp_max"`
+		Pressure  *float64 `json:"pressure"`
+		Humidity  int      `json:"humidity"`
+	} `json:"main"`
+	Visibility int `json:"visibility"`
+	Wind       *struct {
+		Speed *float64 `json:"speed"`
+		Deg   int      `json:"deg"`
+		Gust  *float64 `json:"gust"`
+	} `json:"wind"`
+	Clouds struct {
+		All int `json:"all"`
+	} `json:"clouds"`
+	Rain *struct {
+		OneHour *float64 `json:"1h"`
+	} `json:"rain"`
+	Snow *struct {
+		OneHour *float64 `json:"1h"`
+	} `json:"snow"`
+	Dt  int64 `json:"dt"`
+	Sys struct {
+		Country string `json:"country"`
+		Sunrise int64  `json:"sunrise"`
+		Sunset  int64  `json:"sunset"`
+	} `json:"sys"`
+	Timezone int    `json:"timezone"`
+	Name     string `json:"name"`
 }
 
-func (c *WeatherClient) FetchCurrent(ctx context.Context, lat, lon float64) (*entity.WeatherData, error) {
-	url := fmt.Sprintf("%s/data/2.5/weather?lat=%f&lon=%f&appid=%s&units=metric&lang=ja",
-		c.baseURL, lat, lon, c.apiKey)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating weather request: %w", err)
+func (c *WeatherClient) url(path string, lat, lon float64, units string) string {
+	q := url.Values{
+		"lat":   {strconv.FormatFloat(lat, 'f', -1, 64)},
+		"lon":   {strconv.FormatFloat(lon, 'f', -1, 64)},
+		"units": {units},
+		"lang":  {"ja"},
+		"appid": {c.apiKey},
 	}
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("weather API request failed: %w", err)
-	}
-	// 注意: ログには URL を含めない。OpenWeather の URL クエリには
-	// API キー (`appid=...`) が含まれるため、ログ流出すると認証情報漏洩リスクがある。
-	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
-			slog.Warn("failed to close weather response body", "error", cerr)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("weather API returned status %d", resp.StatusCode)
-	}
-
-	var data owmCurrentResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode weather response: %w", err)
-	}
-
-	description := ""
-	if len(data.Weather) > 0 {
-		description = data.Weather[0].Description
-	}
-
-	return &entity.WeatherData{
-		Temperature: data.Main.Temp,
-		FeelsLike:   data.Main.FeelsLike,
-		WindSpeed:   data.Wind.Speed,
-		WindDeg:     data.Wind.Deg,
-		Pressure:    data.Main.Pressure,
-		Humidity:    data.Main.Humidity,
-		Description: description,
-		DateTime:    time.Unix(data.Dt, 0),
-	}, nil
+	// 注意: URL には API キー（appid）が入るので、ログにもエラーにも含めない（getJSON が外す）。
+	return c.baseURL + path + "?" + q.Encode()
 }
 
-type owmForecastResponse struct {
-	List []struct {
-		Main struct {
-			Temp      float64 `json:"temp"`
-			FeelsLike float64 `json:"feels_like"`
-			Pressure  float64 `json:"pressure"`
-			Humidity  int     `json:"humidity"`
-		} `json:"main"`
-		Wind struct {
-			Speed float64 `json:"speed"`
-			Deg   int     `json:"deg"`
-		} `json:"wind"`
-		Weather []struct {
-			Description string `json:"description"`
-		} `json:"weather"`
-		Dt int64 `json:"dt"`
-	} `json:"list"`
+// FetchCurrent は現在の天気を取得する。風速・気圧が数でなければ 502 の上流の失敗にする（Next #414）。
+func (c *WeatherClient) FetchCurrent(ctx context.Context, lat, lon float64, units string) (*entity.WeatherData, error) {
+	var raw owmCurrentResponse
+	if err := c.fetch.getJSON(ctx, c.url("/data/2.5/weather", lat, lon, units), &raw); err != nil {
+		return nil, fmt.Errorf("openweathermap current: %w", err)
+	}
+	switch {
+	case raw.Wind == nil || raw.Wind.Speed == nil:
+		return nil, domain.NewInvalidUpstreamResponse("OpenWeatherMap returned an invalid wind.speed")
+	case raw.Main == nil || raw.Main.Pressure == nil:
+		return nil, domain.NewInvalidUpstreamResponse("OpenWeatherMap returned an invalid main.pressure")
+	case len(raw.Weather) == 0:
+		return nil, domain.NewInvalidUpstreamResponse("OpenWeatherMap returned no weather condition")
+	}
+
+	w := &entity.WeatherData{
+		Lat:         raw.Coord.Lat,
+		Lon:         raw.Coord.Lon,
+		CityName:    raw.Name,
+		Country:     raw.Sys.Country,
+		Temperature: raw.Main.Temp,
+		FeelsLike:   raw.Main.FeelsLike,
+		TempMin:     orDefault(raw.Main.TempMin, raw.Main.Temp),
+		TempMax:     orDefault(raw.Main.TempMax, raw.Main.Temp),
+		Humidity:    raw.Main.Humidity,
+		Pressure:    *raw.Main.Pressure,
+		WindSpeed:   *raw.Wind.Speed,
+		WindDeg:     raw.Wind.Deg,
+		WindGust:    raw.Wind.Gust,
+		Cloudiness:  raw.Clouds.All,
+		Visibility:  raw.Visibility,
+		Condition: entity.WeatherCondition{
+			ID:          raw.Weather[0].ID,
+			Main:        raw.Weather[0].Main,
+			Description: raw.Weather[0].Description,
+			Icon:        raw.Weather[0].Icon,
+		},
+		Sunrise:  time.Unix(raw.Sys.Sunrise, 0),
+		Sunset:   time.Unix(raw.Sys.Sunset, 0),
+		DateTime: time.Unix(raw.Dt, 0),
+		Timezone: raw.Timezone,
+	}
+	if raw.Rain != nil {
+		w.Rain = raw.Rain.OneHour
+	}
+	if raw.Snow != nil {
+		w.Snow = raw.Snow.OneHour
+	}
+	return w, nil
 }
 
-func (c *WeatherClient) FetchForecast(ctx context.Context, lat, lon float64) ([]*entity.WeatherData, error) {
-	url := fmt.Sprintf("%s/data/2.5/forecast?lat=%f&lon=%f&appid=%s&units=metric&lang=ja",
-		c.baseURL, lat, lon, c.apiKey)
+// FetchForecast は5日間・3時間ごとの予報を、上流の応答のまま返す（Next も整形せずに返している）。
+func (c *WeatherClient) FetchForecast(ctx context.Context, lat, lon float64, units string) (json.RawMessage, error) {
+	var raw json.RawMessage
+	if err := c.fetch.getJSON(ctx, c.url("/data/2.5/forecast", lat, lon, units), &raw); err != nil {
+		return nil, fmt.Errorf("openweathermap forecast: %w", err)
+	}
+	return raw, nil
+}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating forecast request: %w", err)
+func orDefault(p *float64, def float64) float64 {
+	if p == nil {
+		return def
 	}
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("forecast API request failed: %w", err)
-	}
-	// 注意: ログには URL を含めない。OpenWeather の URL クエリには
-	// API キー (`appid=...`) が含まれるため、ログ流出すると認証情報漏洩リスクがある。
-	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
-			slog.Warn("failed to close forecast response body", "error", cerr)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("forecast API returned status %d", resp.StatusCode)
-	}
-
-	var data owmForecastResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode forecast response: %w", err)
-	}
-
-	result := make([]*entity.WeatherData, 0, len(data.List))
-	for _, item := range data.List {
-		description := ""
-		if len(item.Weather) > 0 {
-			description = item.Weather[0].Description
-		}
-		result = append(result, &entity.WeatherData{
-			Temperature: item.Main.Temp,
-			FeelsLike:   item.Main.FeelsLike,
-			WindSpeed:   item.Wind.Speed,
-			WindDeg:     item.Wind.Deg,
-			Pressure:    item.Main.Pressure,
-			Humidity:    item.Main.Humidity,
-			Description: description,
-			DateTime:    time.Unix(item.Dt, 0),
-		})
-	}
-	return result, nil
+	return *p
 }

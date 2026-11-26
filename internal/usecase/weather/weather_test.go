@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -17,20 +18,20 @@ import (
 
 type MockWeatherAPI struct{ mock.Mock }
 
-func (m *MockWeatherAPI) FetchCurrent(ctx context.Context, lat, lon float64) (*entity.WeatherData, error) {
-	args := m.Called(ctx, lat, lon)
+func (m *MockWeatherAPI) FetchCurrent(ctx context.Context, lat, lon float64, units string) (*entity.WeatherData, error) {
+	args := m.Called(ctx, lat, lon, units)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*entity.WeatherData), args.Error(1)
 }
 
-func (m *MockWeatherAPI) FetchForecast(ctx context.Context, lat, lon float64) ([]*entity.WeatherData, error) {
-	args := m.Called(ctx, lat, lon)
+func (m *MockWeatherAPI) FetchForecast(ctx context.Context, lat, lon float64, units string) (json.RawMessage, error) {
+	args := m.Called(ctx, lat, lon, units)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*entity.WeatherData), args.Error(1)
+	return args.Get(0).(json.RawMessage), args.Error(1)
 }
 
 type MockCache struct{ mock.Mock }
@@ -44,216 +45,119 @@ func (m *MockCache) Get(ctx context.Context, key string) ([]byte, error) {
 }
 
 func (m *MockCache) Set(ctx context.Context, key string, value []byte, ttl time.Duration) error {
-	args := m.Called(ctx, key, value, ttl)
-	return args.Error(0)
+	return m.Called(ctx, key, value, ttl).Error(0)
 }
 
 // --- Tests ---
 
-func TestGetCurrent_CacheMiss(t *testing.T) {
-	ctx := context.Background()
-	mockAPI := &MockWeatherAPI{}
-	mockCache := &MockCache{}
+const lat, lon = 35.6762, 139.6503
 
-	lat, lon := 35.6762, 139.6503
-	expectedData := &entity.WeatherData{
-		Temperature: 22.5,
-		FeelsLike:   21.0,
-		WindSpeed:   3.5,
-		WindDeg:     180,
-		Pressure:    1013.0,
-		Humidity:    60,
-		Description: "晴れ",
-		DateTime:    time.Now(),
+func sample() *entity.WeatherData {
+	return &entity.WeatherData{
+		Temperature: 22.5, WindSpeed: 3.2, Pressure: 1013,
+		Sunrise:  time.Unix(1661834187, 0).UTC(),
+		DateTime: time.Unix(1661870592, 0).UTC(),
 	}
-	expectedKey := cacheKey(lat, lon, "current")
+}
 
-	// キャッシュにはヒットしない
-	mockCache.On("Get", ctx, expectedKey).Return(nil, errors.New("cache miss"))
-	// APIが呼ばれる
-	mockAPI.On("FetchCurrent", ctx, lat, lon).Return(expectedData, nil)
-	// キャッシュに保存される
-	mockCache.On("Set", ctx, expectedKey, mock.AnythingOfType("[]uint8"), weatherTTL).Return(nil)
+func TestGetCurrent_CacheMiss(t *testing.T) {
+	api, cache := &MockWeatherAPI{}, &MockCache{}
+	key := "weather:current:metric:35.6762:139.6503"
+	cache.On("Get", mock.Anything, key).Return(nil, nil)
+	api.On("FetchCurrent", mock.Anything, lat, lon, "metric").Return(sample(), nil)
+	cache.On("Set", mock.Anything, key, mock.Anything, weatherTTL).Return(nil)
 
-	uc := NewWeatherUsecase(mockAPI, mockCache)
-	result, err := uc.GetCurrent(ctx, lat, lon)
+	got, fromCache, err := NewWeatherUsecase(api, cache).GetCurrent(t.Context(), lat, lon, "metric")
 
 	require.NoError(t, err)
-	assert.Equal(t, expectedData.Temperature, result.Temperature)
-	assert.Equal(t, expectedData.Description, result.Description)
-	mockAPI.AssertExpectations(t)
-	mockCache.AssertExpectations(t)
+	assert.False(t, fromCache)
+	assert.Equal(t, sample(), got)
+	api.AssertExpectations(t)
+	cache.AssertExpectations(t)
 }
 
 func TestGetCurrent_CacheHit(t *testing.T) {
-	ctx := context.Background()
-	mockAPI := &MockWeatherAPI{}
-	mockCache := &MockCache{}
-
-	lat, lon := 35.6762, 139.6503
-	cachedData := &entity.WeatherData{
-		Temperature: 20.0,
-		Description: "曇り",
-		DateTime:    time.Now(),
-	}
-	cachedJSON, err := json.Marshal(cachedData)
+	api, cache := &MockWeatherAPI{}, &MockCache{}
+	b, err := json.Marshal(sample())
 	require.NoError(t, err)
+	cache.On("Get", mock.Anything, "weather:current:imperial:35.6762:139.6503").Return(b, nil)
 
-	expectedKey := cacheKey(lat, lon, "current")
-
-	// キャッシュにヒット
-	mockCache.On("Get", ctx, expectedKey).Return(cachedJSON, nil)
-
-	uc := NewWeatherUsecase(mockAPI, mockCache)
-	result, err := uc.GetCurrent(ctx, lat, lon)
+	got, fromCache, err := NewWeatherUsecase(api, cache).GetCurrent(t.Context(), lat, lon, "imperial")
 
 	require.NoError(t, err)
-	assert.Equal(t, cachedData.Temperature, result.Temperature)
-	assert.Equal(t, cachedData.Description, result.Description)
-	// APIは呼ばれない
-	mockAPI.AssertNotCalled(t, "FetchCurrent", mock.Anything, mock.Anything, mock.Anything)
-	mockCache.AssertExpectations(t)
+	assert.True(t, fromCache)
+	assert.Equal(t, sample(), got)
+	api.AssertNotCalled(t, "FetchCurrent", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
-func TestGetForecast_CacheMiss(t *testing.T) {
-	ctx := context.Background()
-	mockAPI := &MockWeatherAPI{}
-	mockCache := &MockCache{}
+func TestGetForecast_CacheMissThenHit(t *testing.T) {
+	api, cache := &MockWeatherAPI{}, &MockCache{}
+	key := "weather:forecast:metric:35.6762:139.6503"
+	raw := json.RawMessage(`{"cod":"200","list":[]}`)
+	cache.On("Get", mock.Anything, key).Return(nil, nil).Once()
+	api.On("FetchForecast", mock.Anything, lat, lon, "metric").Return(raw, nil).Once()
+	cache.On("Set", mock.Anything, key, []byte(raw), weatherTTL).Return(nil)
 
-	lat, lon := 34.6937, 135.5023
-	expectedData := []*entity.WeatherData{
-		{Temperature: 18.0, Description: "小雨", DateTime: time.Now()},
-		{Temperature: 20.0, Description: "晴れ", DateTime: time.Now().Add(3 * time.Hour)},
-	}
-	expectedKey := cacheKey(lat, lon, "forecast")
-
-	// キャッシュにはヒットしない
-	mockCache.On("Get", ctx, expectedKey).Return(nil, errors.New("cache miss"))
-	// APIが呼ばれる
-	mockAPI.On("FetchForecast", ctx, lat, lon).Return(expectedData, nil)
-	// キャッシュに保存される
-	mockCache.On("Set", ctx, expectedKey, mock.AnythingOfType("[]uint8"), weatherTTL).Return(nil)
-
-	uc := NewWeatherUsecase(mockAPI, mockCache)
-	result, err := uc.GetForecast(ctx, lat, lon)
-
+	got, fromCache, err := NewWeatherUsecase(api, cache).GetForecast(t.Context(), lat, lon, "metric")
 	require.NoError(t, err)
-	require.Len(t, result, 2)
-	assert.Equal(t, expectedData[0].Temperature, result[0].Temperature)
-	assert.Equal(t, expectedData[1].Description, result[1].Description)
-	mockAPI.AssertExpectations(t)
-	mockCache.AssertExpectations(t)
-}
+	assert.False(t, fromCache)
+	assert.JSONEq(t, string(raw), string(got))
 
-func TestGetForecast_CacheHit(t *testing.T) {
-	ctx := context.Background()
-	mockAPI := &MockWeatherAPI{}
-	mockCache := &MockCache{}
-
-	lat, lon := 34.6937, 135.5023
-	cachedData := []*entity.WeatherData{
-		{Temperature: 15.0, Description: "雨", DateTime: time.Now()},
-	}
-	cachedJSON, err := json.Marshal(cachedData)
+	cache.On("Get", mock.Anything, key).Return([]byte(raw), nil).Once()
+	got, fromCache, err = NewWeatherUsecase(api, cache).GetForecast(t.Context(), lat, lon, "metric")
 	require.NoError(t, err)
-
-	expectedKey := cacheKey(lat, lon, "forecast")
-
-	// キャッシュにヒット
-	mockCache.On("Get", ctx, expectedKey).Return(cachedJSON, nil)
-
-	uc := NewWeatherUsecase(mockAPI, mockCache)
-	result, err := uc.GetForecast(ctx, lat, lon)
-
-	require.NoError(t, err)
-	require.Len(t, result, 1)
-	assert.Equal(t, cachedData[0].Temperature, result[0].Temperature)
-	// APIは呼ばれない
-	mockAPI.AssertNotCalled(t, "FetchForecast", mock.Anything, mock.Anything, mock.Anything)
-	mockCache.AssertExpectations(t)
+	assert.True(t, fromCache)
+	assert.JSONEq(t, string(raw), string(got))
+	api.AssertExpectations(t)
 }
 
-func TestGetCurrent_APIError(t *testing.T) {
-	ctx := context.Background()
-	mockAPI := &MockWeatherAPI{}
-	mockCache := &MockCache{}
-
-	lat, lon := 35.6762, 139.6503
-	expectedKey := cacheKey(lat, lon, "current")
-	apiErr := errors.New("weather API request failed")
-
-	mockCache.On("Get", ctx, expectedKey).Return(nil, errors.New("cache miss"))
-	mockAPI.On("FetchCurrent", ctx, lat, lon).Return(nil, apiErr)
-
-	uc := NewWeatherUsecase(mockAPI, mockCache)
-	result, err := uc.GetCurrent(ctx, lat, lon)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	// Setは呼ばれない
-	mockCache.AssertNotCalled(t, "Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	mockAPI.AssertExpectations(t)
-	mockCache.AssertExpectations(t)
-}
-
-func TestGetForecast_APIError(t *testing.T) {
-	ctx := context.Background()
-	mockAPI := &MockWeatherAPI{}
-	mockCache := &MockCache{}
-
-	lat, lon := 34.6937, 135.5023
-	expectedKey := cacheKey(lat, lon, "forecast")
-	apiErr := errors.New("forecast API request failed")
-
-	mockCache.On("Get", ctx, expectedKey).Return(nil, errors.New("cache miss"))
-	mockAPI.On("FetchForecast", ctx, lat, lon).Return(nil, apiErr)
-
-	uc := NewWeatherUsecase(mockAPI, mockCache)
-	result, err := uc.GetForecast(ctx, lat, lon)
-
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	// Setは呼ばれない
-	mockCache.AssertNotCalled(t, "Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	mockAPI.AssertExpectations(t)
-	mockCache.AssertExpectations(t)
-}
-
-func TestCacheKey_RoundingConsistency(t *testing.T) {
+// 不正な値（風速・気圧）で弾かれた応答や上流の失敗は、キャッシュに書かない（Next #414）。
+func TestWeather_UpstreamError_NotCached(t *testing.T) {
+	invalid := domain.NewInvalidUpstreamResponse("OpenWeatherMap returned an invalid wind.speed")
 	tests := []struct {
-		name        string
-		lat         float64
-		lon         float64
-		typ         string
-		expectedKey string
+		name string
+		call func(u *WeatherUsecase, api *MockWeatherAPI) error
 	}{
-		{
-			name:        "小数4桁に丸める",
-			lat:         35.676219,
-			lon:         139.650318,
-			typ:         "current",
-			expectedKey: "weather:current:35.6762:139.6503",
-		},
-		{
-			name:        "整数座標",
-			lat:         35.0,
-			lon:         139.0,
-			typ:         "forecast",
-			expectedKey: "weather:forecast:35.0000:139.0000",
-		},
-		{
-			name:        "負の座標",
-			lat:         -33.8688,
-			lon:         151.2093,
-			typ:         "current",
-			expectedKey: "weather:current:-33.8688:151.2093",
-		},
+		{"current", func(u *WeatherUsecase, api *MockWeatherAPI) error {
+			api.On("FetchCurrent", mock.Anything, lat, lon, "metric").Return(nil, invalid)
+			_, _, err := u.GetCurrent(t.Context(), lat, lon, "metric")
+			return err
+		}},
+		{"forecast", func(u *WeatherUsecase, api *MockWeatherAPI) error {
+			api.On("FetchForecast", mock.Anything, lat, lon, "metric").Return(nil, invalid)
+			_, _, err := u.GetForecast(t.Context(), lat, lon, "metric")
+			return err
+		}},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := cacheKey(tt.lat, tt.lon, tt.typ)
-			assert.Equal(t, tt.expectedKey, key)
+			api, cache := &MockWeatherAPI{}, &MockCache{}
+			cache.On("Get", mock.Anything, mock.Anything).Return(nil, nil)
+
+			err := tt.call(NewWeatherUsecase(api, cache), api)
+
+			var ue *domain.UpstreamError
+			require.True(t, errors.As(err, &ue))
+			cache.AssertNotCalled(t, "Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+		})
+	}
+}
+
+func TestCacheKey(t *testing.T) {
+	tests := []struct {
+		name     string
+		lat, lon float64
+		typ      string
+		units    string
+		want     string
+	}{
+		{"小数4桁に丸める", 35.676219, 139.650318, "current", "metric", "weather:current:metric:35.6762:139.6503"},
+		{"整数座標", 35.0, 139.0, "forecast", "standard", "weather:forecast:standard:35.0000:139.0000"},
+		{"負の座標", -33.8688, 151.2093, "current", "imperial", "weather:current:imperial:-33.8688:151.2093"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, cacheKey(tt.lat, tt.lon, tt.typ, tt.units))
 		})
 	}
 }

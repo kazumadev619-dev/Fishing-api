@@ -12,7 +12,7 @@ import (
 // TideAPI は外部潮汐APIクライアントのインターフェース。
 // infrastructure/external/ の実装が満たすこと。
 type TideAPI interface {
-	FetchTideData(ctx context.Context, prefCode, portCode, date string) (*entity.TideData, error)
+	FetchTideData(ctx context.Context, prefCode, portCode, date, rng string) (*entity.TideData, error)
 }
 
 // Cache はキャッシュストアのインターフェース。
@@ -36,27 +36,27 @@ func NewTideUsecase(api TideAPI, cache Cache) *TideUsecase {
 	return &TideUsecase{api: api, cache: cache}
 }
 
-// GetTideData は指定された港コード・日付の潮汐データを返す。
-// キャッシュにデータがある場合はAPIを呼ばずキャッシュから返す。
-func (u *TideUsecase) GetTideData(ctx context.Context, prefCode, portCode, date string) (*entity.TideData, error) {
-	key := fmt.Sprintf("tide:%s:%s:%s", prefCode, portCode, date)
+// GetTideData は港・日付・範囲（day / week / month）の潮汐と、キャッシュから返したかを返す。
+// 取得に失敗したときはキャッシュに書かない。
+func (u *TideUsecase) GetTideData(ctx context.Context, prefCode, portCode, date, rng string) (*entity.TideData, bool, error) {
+	key := fmt.Sprintf("tide:%s:%s:%s:%s", prefCode, portCode, date, rng)
 
 	cached, _ := u.cache.Get(ctx, key) //nolint:errcheck // cache miss is acceptable
 	if cached != nil {
 		var data entity.TideData
 		if err := json.Unmarshal(cached, &data); err == nil {
-			return &data, nil
+			return &data, true, nil
 		}
 	}
 
-	data, err := u.api.FetchTideData(ctx, prefCode, portCode, date)
+	data, err := u.api.FetchTideData(ctx, prefCode, portCode, date, rng)
 	if err != nil {
-		return nil, fmt.Errorf("fetching tide data for port %s on %s: %w", portCode, date, err)
+		return nil, false, fmt.Errorf("fetching tide data for port %s on %s: %w", portCode, date, err)
 	}
 
 	if b, err := json.Marshal(data); err == nil {
 		u.cache.Set(ctx, key, b, tideTTL) //nolint:errcheck
 	}
 
-	return data, nil
+	return data, false, nil
 }
