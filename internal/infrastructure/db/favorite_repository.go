@@ -23,7 +23,7 @@ func NewFavoriteRepository(db *sql.DB) repository.FavoriteRepository {
 func (r *favoriteRepository) FindByUserID(ctx context.Context, userID uuid.UUID) ([]*entity.Location, error) {
 	rows, err := r.queries.FindFavoritesByUserID(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("finding favorites for user %s: %w", userID, err)
+		return nil, fmt.Errorf("finding favorites for user %s: %w", userID, classifyDBError(err))
 	}
 	locations := make([]*entity.Location, 0, len(rows))
 	for _, row := range rows {
@@ -38,7 +38,7 @@ func (r *favoriteRepository) Add(ctx context.Context, userID uuid.UUID, location
 		UserID:     userID,
 		LocationID: locationID,
 	}); err != nil {
-		return fmt.Errorf("adding favorite for user %s: %w", userID, err)
+		return fmt.Errorf("adding favorite for user %s: %w", userID, classifyDBError(err))
 	}
 	return nil
 }
@@ -49,11 +49,11 @@ func (r *favoriteRepository) Delete(ctx context.Context, userID uuid.UUID, locat
 		LocationID: locationID,
 	})
 	if err != nil {
-		return fmt.Errorf("deleting favorite: %w", err)
+		return fmt.Errorf("deleting favorite: %w", classifyDBError(err))
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("checking rows affected: %w", err)
+		return fmt.Errorf("checking rows affected: %w", classifyDBError(err))
 	}
 	if n == 0 {
 		return domain.ErrNotFound
@@ -67,7 +67,7 @@ func (r *favoriteRepository) Exists(ctx context.Context, userID uuid.UUID, locat
 		LocationID: locationID,
 	})
 	if err != nil {
-		return false, fmt.Errorf("checking favorite existence: %w", err)
+		return false, fmt.Errorf("checking favorite existence: %w", classifyDBError(err))
 	}
 	return exists, nil
 }

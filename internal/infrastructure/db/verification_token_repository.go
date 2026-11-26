@@ -28,7 +28,7 @@ func (r *verificationTokenRepository) Create(ctx context.Context, token *entity.
 		ExpiresAt: token.ExpiresAt,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("creating verification token: %w", err)
+		return nil, fmt.Errorf("creating verification token: %w", classifyDBError(err))
 	}
 	return &entity.VerificationToken{
 		ID:        row.ID,
@@ -45,7 +45,7 @@ func (r *verificationTokenRepository) FindByToken(ctx context.Context, token str
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, domain.ErrNotFound
 		}
-		return nil, fmt.Errorf("finding verification token: %w", err)
+		return nil, fmt.Errorf("finding verification token: %w", classifyDBError(err))
 	}
 	return &entity.VerificationToken{
 		ID:        row.ID,
@@ -58,7 +58,7 @@ func (r *verificationTokenRepository) FindByToken(ctx context.Context, token str
 
 func (r *verificationTokenRepository) DeleteByEmail(ctx context.Context, email string) error {
 	if err := r.queries.DeleteVerificationTokensByEmail(ctx, email); err != nil {
-		return fmt.Errorf("deleting verification tokens by email: %w", err)
+		return fmt.Errorf("deleting verification tokens by email: %w", classifyDBError(err))
 	}
 	return nil
 }
