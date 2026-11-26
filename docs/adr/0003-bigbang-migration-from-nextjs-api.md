@@ -1,6 +1,6 @@
 # 0003. Next.js API Routes からのビッグバン移行
 
-- Status: Accepted
+- Status: Superseded by [ADR 0006](0006-incremental-migration-via-nextjs-bff.md)
 - Date: 2026-05-08
 - Deciders: kazumadev619-dev
 
@@ -39,4 +39,5 @@ FishingConditionsApp の API は当初 Next.js API Routes で実装されてい�
 
 - 設計仕様: [`docs/superpowers/specs/2026-04-07-go-backend-design.md`](../superpowers/specs/2026-04-07-go-backend-design.md)（「移行戦略」節）
 - Ingress 定義: `k8s/fishing-api/ingress.yaml`（`/api/*` → fishing-api）
+- 置き換えた ADR: [ADR 0006 — Next を BFF にして1本ずつ Go に移す](0006-incremental-migration-via-nextjs-bff.md)
 - 関連: [ADR 0005 — クリーンアーキテクチャ層構成](0005-clean-architecture-layers.md)

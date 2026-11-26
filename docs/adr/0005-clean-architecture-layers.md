@@ -47,4 +47,4 @@ interface/ → usecase/ → domain/ ← infrastructure/
 - 設計仕様: [`docs/superpowers/specs/2026-04-07-go-backend-design.md`](../superpowers/specs/2026-04-07-go-backend-design.md)（「アーキテクチャ：クリーンアーキテクチャ」節）
 - クリーンアーキテクチャルール: [`.claude/rules/clean-architecture.md`](../../.claude/rules/clean-architecture.md)
 - 実装: `internal/domain/`, `internal/usecase/`, `internal/infrastructure/`, `internal/interface/`, `cmd/server/main.go`
-- 関連: [ADR 0003 — ビッグバン移行](0003-bigbang-migration-from-nextjs-api.md), [ADR 0004 — DB アクセス sqlc + pgx](0004-db-access-sqlc-pgx.md)
+- 関連: [ADR 0003 — ビッグバン移行（0006 で置き換え）](0003-bigbang-migration-from-nextjs-api.md), [ADR 0006 — Next を BFF にして1本ずつ Go に移す](0006-incremental-migration-via-nextjs-bff.md), [ADR 0004 — DB アクセス sqlc + pgx](0004-db-access-sqlc-pgx.md)
