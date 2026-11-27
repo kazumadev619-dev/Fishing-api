@@ -43,9 +43,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "email already registered", "code": "ALREADY_EXISTS", "status": 409})
 			return
 		}
-		if respondClassifiedError(c, err, nil) {
-			return
-		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error", "code": "INTERNAL_ERROR", "status": 500})
 		return
 	}
@@ -73,9 +70,6 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 		if errors.Is(err, domain.ErrUnauthorized) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials", "code": "UNAUTHORIZED", "status": 401})
-			return
-		}
-		if respondClassifiedError(c, err, nil) {
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error", "code": "INTERNAL_ERROR", "status": 500})

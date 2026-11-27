@@ -52,9 +52,6 @@ func (h *LocationHandler) Search(c *gin.Context) {
 
 	results, err := h.usecase.Search(c.Request.Context(), query, limit)
 	if err != nil {
-		if respondClassifiedError(c, err, nil) {
-			return
-		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "location search failed", "code": "INTERNAL_ERROR", "status": 500})
 		return
 	}
