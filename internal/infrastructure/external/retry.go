@@ -20,6 +20,7 @@ const (
 	maxRetries     = 3
 	attemptTimeout = 10 * time.Second
 	baseBackoff    = 100 * time.Millisecond
+	maxErrorBody   = 512 // ログに残す上流のエラー本文の長さ（バイト）
 )
 
 // 429 は入れない。絞られている上流を叩き直すと呼び出しが増えるだけ（Next #317）。
@@ -49,7 +50,7 @@ func (f *fetcher) getJSON(ctx context.Context, rawURL string, out any) error {
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			delay := f.backoff << (attempt - 1)
-			slog.Warn("retrying upstream request", "attempt", attempt, "maxRetries", maxRetries, "delay", delay, "kind", lastErr.Kind, "status", lastErr.StatusCode)
+			slog.WarnContext(ctx, "retrying upstream request", "attempt", attempt, "maxRetries", maxRetries, "delay", delay, "kind", lastErr.Kind, "status", lastErr.StatusCode)
 			select {
 			case <-time.After(delay):
 			case <-ctx.Done():
@@ -92,7 +93,7 @@ func (f *fetcher) attempt(ctx context.Context, rawURL string) ([]byte, error) {
 		var body []byte
 		body, err = io.ReadAll(resp.Body)
 		if err == nil {
-			return body, classifyStatus(resp.StatusCode)
+			return body, classifyStatus(resp.StatusCode, body)
 		}
 	}
 	switch {
@@ -109,14 +110,15 @@ func (f *fetcher) attempt(ctx context.Context, rawURL string) ([]byte, error) {
 }
 
 // classifyStatus は Next の createApiError と同じ分け方。200 番台は nil。
-func classifyStatus(status int) error {
+// 本文の先頭は原因を追えるよう Err に残す（ログにだけ出る。応答には出ない）。
+func classifyStatus(status int, body []byte) error {
 	if status >= 200 && status < 300 {
 		return nil
 	}
 	e := &domain.UpstreamError{
 		StatusCode: status,
 		Retryable:  slices.Contains(retryableStatuses, status),
-		Err:        fmt.Errorf("upstream returned status %d", status),
+		Err:        fmt.Errorf("upstream returned status %d: %s", status, body[:min(len(body), maxErrorBody)]),
 	}
 	switch {
 	case status == http.StatusTooManyRequests:

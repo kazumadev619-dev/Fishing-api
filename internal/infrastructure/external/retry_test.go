@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -159,4 +160,21 @@ func TestGetJSON_InvalidJSONIsServerError(t *testing.T) {
 // fastFetcher はテスト用に待ち時間を縮めた fetcher を返す。
 func fastFetcher(c *http.Client) *fetcher {
 	return &fetcher{client: c, attemptTimeout: 2 * time.Second, backoff: time.Millisecond}
+}
+
+// 2xx 以外の本文の先頭は、原因を追えるよう UpstreamError.Err に残す（ログ用。応答には出ない）。長い本文は切る。
+func TestGetJSON_KeepsErrorBodyPrefix(t *testing.T) {
+	long := strings.Repeat("x", 2000)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"cod":401,"message":"Invalid API key."}` + long))
+	}))
+	defer srv.Close()
+
+	err := fastFetcher(srv.Client()).getJSON(t.Context(), srv.URL, &struct{}{})
+
+	var ue *domain.UpstreamError
+	require.ErrorAs(t, err, &ue)
+	assert.Contains(t, ue.Err.Error(), `"message":"Invalid API key."`)
+	assert.Less(t, len(ue.Err.Error()), 700)
 }
