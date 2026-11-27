@@ -16,8 +16,8 @@ import (
 
 type MockTideAPI struct{ mock.Mock }
 
-func (m *MockTideAPI) FetchTideData(ctx context.Context, prefCode, portCode, date, rng string) (*entity.TideData, error) {
-	args := m.Called(ctx, prefCode, portCode, date, rng)
+func (m *MockTideAPI) FetchTideData(ctx context.Context, prefCode, portCode, date, tideRange string) (*entity.TideData, error) {
+	args := m.Called(ctx, prefCode, portCode, date, tideRange)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}

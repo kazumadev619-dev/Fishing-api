@@ -18,8 +18,8 @@ import (
 
 type MockTideUsecase struct{ mock.Mock }
 
-func (m *MockTideUsecase) GetTideData(ctx context.Context, prefCode, portCode, date, rng string) (*entity.TideData, bool, error) {
-	args := m.Called(ctx, prefCode, portCode, date, rng)
+func (m *MockTideUsecase) GetTideData(ctx context.Context, prefCode, portCode, date, tideRange string) (*entity.TideData, bool, error) {
+	args := m.Called(ctx, prefCode, portCode, date, tideRange)
 	if args.Get(0) == nil {
 		return nil, false, args.Error(2)
 	}

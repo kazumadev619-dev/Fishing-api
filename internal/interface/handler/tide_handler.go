@@ -13,7 +13,7 @@ import (
 )
 
 type TideFetcher interface {
-	GetTideData(ctx context.Context, prefCode, portCode, date, rng string) (*entity.TideData, bool, error)
+	GetTideData(ctx context.Context, prefCode, portCode, date, tideRange string) (*entity.TideData, bool, error)
 }
 
 type TideHandler struct {
@@ -85,44 +85,42 @@ type tideEvent struct {
 	CM   float64 `json:"cm"`
 }
 
-func badTideRequest(c *gin.Context, msg string) {
-	c.JSON(http.StatusBadRequest, gin.H{"error": msg, "status": http.StatusBadRequest})
-}
-
-func (h *TideHandler) Get(c *gin.Context) {
-	prefCode := c.Query("prefectureCode")
-	portCode := c.Query("portCode")
-	date := c.Query("date")
+// tideQuery はクエリを読み、既定値（range は week、date は JST の今日）を入れて確かめる。
+// 不正なら Next と同じ文言を返す。
+func tideQuery(c *gin.Context) (prefCode, portCode, date, tideRange, errMsg string) {
+	prefCode, portCode = c.Query("prefectureCode"), c.Query("portCode")
+	date, tideRange = c.Query("date"), c.Query("range")
 	if date == "" {
 		date = time.Now().In(jst).Format("2006-01-02")
 	}
-	rng := c.Query("range")
-	if rng == "" {
-		rng = "week"
+	if tideRange == "" {
+		tideRange = "week"
 	}
-
 	switch {
 	case prefCode == "":
-		badTideRequest(c, "Missing required parameter: prefectureCode")
-		return
+		errMsg = "Missing required parameter: prefectureCode"
 	case portCode == "":
-		badTideRequest(c, "Missing required parameter: portCode")
-		return
+		errMsg = "Missing required parameter: portCode"
 	case !prefCodeRegex.MatchString(prefCode):
-		badTideRequest(c, "Invalid prefectureCode format")
-		return
+		errMsg = "Invalid prefectureCode format"
 	case !portCodeRegex.MatchString(portCode):
-		badTideRequest(c, "Invalid portCode format")
-		return
+		errMsg = "Invalid portCode format"
 	case !isValidDate(date):
-		badTideRequest(c, "Invalid date. Use an existing date in YYYY-MM-DD format")
-		return
-	case !slices.Contains(tideRanges, rng):
-		badTideRequest(c, "Invalid range. Must be one of: day, week, month")
+		errMsg = "Invalid date. Use an existing date in YYYY-MM-DD format"
+	case !slices.Contains(tideRanges, tideRange):
+		errMsg = "Invalid range. Must be one of: day, week, month"
+	}
+	return prefCode, portCode, date, tideRange, errMsg
+}
+
+func (h *TideHandler) Get(c *gin.Context) {
+	prefCode, portCode, date, tideRange, errMsg := tideQuery(c)
+	if errMsg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg, "status": http.StatusBadRequest})
 		return
 	}
 
-	data, fromCache, err := h.usecase.GetTideData(c.Request.Context(), prefCode, portCode, date, rng)
+	data, fromCache, err := h.usecase.GetTideData(c.Request.Context(), prefCode, portCode, date, tideRange)
 	if err != nil {
 		if respondClassifiedError(c, err, nil) {
 			return

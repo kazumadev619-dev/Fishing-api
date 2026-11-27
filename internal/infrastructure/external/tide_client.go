@@ -72,8 +72,8 @@ type tide736Event struct {
 	CM   float64 `json:"cm"`
 }
 
-// FetchTideData は date（YYYY-MM-DD）から rng（day / week / month）の範囲の潮汐を取得する。
-func (c *TideClient) FetchTideData(ctx context.Context, prefCode, portCode, date, rng string) (*entity.TideData, error) {
+// FetchTideData は date（YYYY-MM-DD）から tideRange（day / week / month）の範囲の潮汐を取得する。
+func (c *TideClient) FetchTideData(ctx context.Context, prefCode, portCode, date, tideRange string) (*entity.TideData, error) {
 	ymd := strings.Split(date, "-")
 	if len(ymd) != 3 {
 		return nil, fmt.Errorf("invalid date %q", date)
@@ -81,7 +81,7 @@ func (c *TideClient) FetchTideData(ctx context.Context, prefCode, portCode, date
 	q := url.Values{
 		"pc": {prefCode}, "hc": {portCode},
 		"yr": {ymd[0]}, "mn": {ymd[1]}, "dy": {ymd[2]},
-		"rg": {rng},
+		"rg": {tideRange},
 	}
 
 	var raw tide736Response

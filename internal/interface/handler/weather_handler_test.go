@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -142,6 +143,10 @@ func TestWeatherHandler_Errors(t *testing.T) {
 			m.On("GetForecast", mock.Anything, 35.0, 139.0, "metric").
 				Return(nil, false, &domain.UpstreamError{Kind: domain.UpstreamTimeout, Retryable: true})
 		}, 504, `{"success":false,"error":"通信がタイムアウトしました。インターネット接続を確認して、もう一度お試しください。","code":"TIMEOUT","retryable":true}`},
+		{"キー未設定は 503", "/api/weather?lat=35&lon=139", func(m *MockWeatherUsecase) {
+			m.On("GetCurrent", mock.Anything, 35.0, 139.0, "metric").
+				Return(nil, false, fmt.Errorf("fetching: %w", domain.ErrUpstreamNotConfigured))
+		}, 503, `{"error":"Weather API is not configured","code":"API_NOT_CONFIGURED","status":503}`},
 		{"想定外は 500", "/api/weather?lat=35&lon=139", func(m *MockWeatherUsecase) {
 			m.On("GetCurrent", mock.Anything, 35.0, 139.0, "metric").Return(nil, false, errors.New("boom"))
 		}, 500, `{"success":false,"error":"天気データの取得中にエラーが発生しました","code":"INTERNAL_ERROR"}`},

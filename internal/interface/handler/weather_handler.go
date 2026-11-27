@@ -3,12 +3,14 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"slices"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 	"github.com/kazumadev619-dev/fishing-api/pkg/validator"
 )
@@ -103,6 +105,11 @@ func (h *WeatherHandler) Get(c *gin.Context) {
 		if err == nil {
 			data = toWeatherBody(w)
 		}
+	}
+	if errors.Is(err, domain.ErrUpstreamNotConfigured) {
+		slog.ErrorContext(ctx, "OPENWEATHER_API_KEY is not configured")
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Weather API is not configured", "code": "API_NOT_CONFIGURED", "status": http.StatusServiceUnavailable})
+		return
 	}
 	if err != nil {
 		if respondClassifiedError(c, err, gin.H{"success": false}) {

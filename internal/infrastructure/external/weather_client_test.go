@@ -176,3 +176,17 @@ func TestWeatherClient_UpstreamError(t *testing.T) {
 	_, err = c.FetchForecast(t.Context(), 35, 139, "metric")
 	require.ErrorAs(t, err, &ue)
 }
+
+// キーが未設定なら上流を呼ばずに ErrUpstreamNotConfigured を返す（Next の 503 API_NOT_CONFIGURED）。
+func TestWeatherClient_NotConfigured(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }))
+	defer srv.Close()
+	c := newWeatherClientWithHTTPClient("", srv.URL, srv.Client())
+
+	_, err := c.FetchCurrent(t.Context(), 35, 139, "metric")
+	assert.ErrorIs(t, err, domain.ErrUpstreamNotConfigured)
+	_, err = c.FetchForecast(t.Context(), 35, 139, "metric")
+	assert.ErrorIs(t, err, domain.ErrUpstreamNotConfigured)
+	assert.False(t, called)
+}
