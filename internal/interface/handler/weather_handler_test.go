@@ -102,6 +102,7 @@ func TestWeatherHandler_Current_OmitsAbsentOptionals(t *testing.T) {
 	assert.NotContains(t, body.Data, "windGust")
 	assert.NotContains(t, body.Data, "rain")
 	assert.NotContains(t, body.Data, "snow")
+	m.AssertExpectations(t)
 }
 
 // 予報は上流の応答をそのまま data に入れる（Next と同じ）。
@@ -115,6 +116,7 @@ func TestWeatherHandler_Forecast(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.JSONEq(t, `{"success":true,"type":"forecast","data":{"cod":"200","cnt":1,"list":[{"dt":1}]},"fromCache":true,"fetchedAt":"IGNORED"}`,
 		replaceFetchedAt(w.Body.String()))
+	m.AssertExpectations(t)
 }
 
 func TestWeatherHandler_Errors(t *testing.T) {

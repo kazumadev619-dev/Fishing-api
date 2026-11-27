@@ -88,6 +88,8 @@ func TestGetCurrent_CacheHit(t *testing.T) {
 	assert.True(t, fromCache)
 	assert.Equal(t, sample(), got)
 	api.AssertNotCalled(t, "FetchCurrent", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	api.AssertExpectations(t)
+	cache.AssertExpectations(t)
 }
 
 func TestGetForecast_CacheMissThenHit(t *testing.T) {
@@ -139,6 +141,8 @@ func TestWeather_UpstreamError_NotCached(t *testing.T) {
 			var ue *domain.UpstreamError
 			require.True(t, errors.As(err, &ue))
 			cache.AssertNotCalled(t, "Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+			api.AssertExpectations(t)
+			cache.AssertExpectations(t)
 		})
 	}
 }
