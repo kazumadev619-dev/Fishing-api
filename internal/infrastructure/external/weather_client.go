@@ -88,9 +88,6 @@ func (c *WeatherClient) url(path string, lat, lon float64, units string) string 
 
 // FetchCurrent は現在の天気を取得する。風速・気圧が数でなければ 502 の上流の失敗にする（Next #414）。
 func (c *WeatherClient) FetchCurrent(ctx context.Context, lat, lon float64, units string) (*entity.WeatherData, error) {
-	if c.apiKey == "" {
-		return nil, domain.ErrUpstreamNotConfigured
-	}
 	var raw owmCurrentResponse
 	if err := c.fetch.getJSON(ctx, c.url("/data/2.5/weather", lat, lon, units), &raw); err != nil {
 		return nil, fmt.Errorf("openweathermap current: %w", err)
@@ -142,9 +139,6 @@ func (c *WeatherClient) FetchCurrent(ctx context.Context, lat, lon float64, unit
 
 // FetchForecast は5日間・3時間ごとの予報を、上流の応答のまま返す（Next も整形せずに返している）。
 func (c *WeatherClient) FetchForecast(ctx context.Context, lat, lon float64, units string) (json.RawMessage, error) {
-	if c.apiKey == "" {
-		return nil, domain.ErrUpstreamNotConfigured
-	}
 	var raw json.RawMessage
 	if err := c.fetch.getJSON(ctx, c.url("/data/2.5/forecast", lat, lon, units), &raw); err != nil {
 		return nil, fmt.Errorf("openweathermap forecast: %w", err)

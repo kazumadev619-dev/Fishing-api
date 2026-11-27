@@ -13,8 +13,6 @@ var (
 	ErrEmailNotVerified = errors.New("email not verified")
 	// ErrDBUnavailable は DB に繋がらない・応答しないときのエラー。ハンドラは 503 にする。
 	ErrDBUnavailable = errors.New("database unavailable")
-	// ErrUpstreamNotConfigured は外部 API のキーが未設定のときのエラー。ハンドラは 503 にする。
-	ErrUpstreamNotConfigured = errors.New("upstream API is not configured")
 )
 
 // UpstreamErrorKind は外部 API の失敗の種別。値は Next の ApiErrorType と同じ文字列で、応答の code に出る。

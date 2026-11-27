@@ -3,14 +3,12 @@ package handler
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 	"slices"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 	"github.com/kazumadev619-dev/fishing-api/pkg/validator"
 )
@@ -21,11 +19,12 @@ type WeatherFetcher interface {
 }
 
 type WeatherHandler struct {
-	usecase WeatherFetcher
+	usecase       WeatherFetcher
+	apiConfigured bool // OpenWeatherMap のキーが設定されているか
 }
 
-func NewWeatherHandler(uc WeatherFetcher) *WeatherHandler {
-	return &WeatherHandler{usecase: uc}
+func NewWeatherHandler(uc WeatherFetcher, apiConfigured bool) *WeatherHandler {
+	return &WeatherHandler{usecase: uc, apiConfigured: apiConfigured}
 }
 
 var weatherUnits = []string{"standard", "metric", "imperial"}
@@ -76,6 +75,12 @@ func badWeatherRequest(c *gin.Context, msg string) {
 }
 
 func (h *WeatherHandler) Get(c *gin.Context) {
+	// Next と同じく、クエリの検証とキャッシュより前に確かめる。
+	if !h.apiConfigured {
+		slog.ErrorContext(c.Request.Context(), "OPENWEATHER_API_KEY is not configured")
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Weather API is not configured", "code": "API_NOT_CONFIGURED", "status": http.StatusServiceUnavailable})
+		return
+	}
 	lat, lon, err := validator.ParseAndValidateCoordinates(c.Query("lat"), c.Query("lon"))
 	if err != nil {
 		badWeatherRequest(c, err.Error())
@@ -105,11 +110,6 @@ func (h *WeatherHandler) Get(c *gin.Context) {
 		if err == nil {
 			data = toWeatherBody(w)
 		}
-	}
-	if errors.Is(err, domain.ErrUpstreamNotConfigured) {
-		slog.ErrorContext(ctx, "OPENWEATHER_API_KEY is not configured")
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Weather API is not configured", "code": "API_NOT_CONFIGURED", "status": http.StatusServiceUnavailable})
-		return
 	}
 	if err != nil {
 		if respondClassifiedError(c, err, gin.H{"success": false}) {

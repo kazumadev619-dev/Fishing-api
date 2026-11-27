@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -38,7 +37,7 @@ func (m *MockWeatherUsecase) GetForecast(ctx context.Context, lat, lon float64, 
 func serveWeather(m *MockWeatherUsecase, url string) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/api/weather", NewWeatherHandler(m).Get)
+	r.GET("/api/weather", NewWeatherHandler(m, true).Get)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, url, nil))
 	return w
@@ -143,10 +142,6 @@ func TestWeatherHandler_Errors(t *testing.T) {
 			m.On("GetForecast", mock.Anything, 35.0, 139.0, "metric").
 				Return(nil, false, &domain.UpstreamError{Kind: domain.UpstreamTimeout, Retryable: true})
 		}, 504, `{"success":false,"error":"通信がタイムアウトしました。インターネット接続を確認して、もう一度お試しください。","code":"TIMEOUT","retryable":true}`},
-		{"キー未設定は 503", "/api/weather?lat=35&lon=139", func(m *MockWeatherUsecase) {
-			m.On("GetCurrent", mock.Anything, 35.0, 139.0, "metric").
-				Return(nil, false, fmt.Errorf("fetching: %w", domain.ErrUpstreamNotConfigured))
-		}, 503, `{"error":"Weather API is not configured","code":"API_NOT_CONFIGURED","status":503}`},
 		{"想定外は 500", "/api/weather?lat=35&lon=139", func(m *MockWeatherUsecase) {
 			m.On("GetCurrent", mock.Anything, 35.0, 139.0, "metric").Return(nil, false, errors.New("boom"))
 		}, 500, `{"success":false,"error":"天気データの取得中にエラーが発生しました","code":"INTERNAL_ERROR"}`},
@@ -167,4 +162,21 @@ func TestWeatherHandler_Errors(t *testing.T) {
 			m.AssertExpectations(t)
 		})
 	}
+}
+
+// キーが未設定なら、クエリの検証とキャッシュより前に 503 を返す（Next の weather/route.ts と同じ順）。
+func TestWeatherHandler_NotConfigured(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	m := &MockWeatherUsecase{}
+	r := gin.New()
+	r.GET("/api/weather", NewWeatherHandler(m, false).Get)
+
+	for _, url := range []string{"/api/weather?lat=35&lon=139", "/api/weather?lat=999&type=bogus"} {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, url, nil))
+
+		assert.Equal(t, http.StatusServiceUnavailable, w.Code, url)
+		assert.JSONEq(t, `{"error":"Weather API is not configured","code":"API_NOT_CONFIGURED","status":503}`, w.Body.String())
+	}
+	m.AssertExpectations(t) // usecase（キャッシュを含む）は呼ばない
 }

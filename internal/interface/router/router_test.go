@@ -18,7 +18,7 @@ func buildRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	handlers := &Handlers{
 		Auth:     handler.NewAuthHandler(nil),
-		Weather:  handler.NewWeatherHandler(nil),
+		Weather:  handler.NewWeatherHandler(nil, true),
 		Tide:     handler.NewTideHandler(nil),
 		Location: handler.NewLocationHandler(nil),
 		Favorite: handler.NewFavoriteHandler(nil),
