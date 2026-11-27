@@ -25,15 +25,20 @@ func classifyDBError(err error) error {
 }
 
 func isDBUnavailable(err error) bool {
+	// 接続の段階の失敗は、中の SQLSTATE（28P01・28000・3D000 など）によらず繋がらない。
+	// ConnectError は PgError を包むので、PgError より先に見る。
+	var connErr *pgconn.ConnectError
+	if errors.As(err, &connErr) {
+		return true
+	}
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) {
 		// 08: 接続の例外、53: 資源の枯渇、57P01〜57P03: 停止・起動中
 		return strings.HasPrefix(pgErr.Code, "08") || strings.HasPrefix(pgErr.Code, "53") ||
 			slices.Contains([]string{"57P01", "57P02", "57P03"}, pgErr.Code)
 	}
-	var connErr *pgconn.ConnectError
 	var netErr net.Error
-	return errors.As(err, &connErr) || errors.As(err, &netErr) ||
+	return errors.As(err, &netErr) ||
 		errors.Is(err, driver.ErrBadConn) || errors.Is(err, sql.ErrConnDone) ||
 		errors.Is(err, context.DeadlineExceeded)
 }
