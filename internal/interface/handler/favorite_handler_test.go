@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -66,6 +67,13 @@ func TestFavoriteHandler_GetList(t *testing.T) {
 				m.On("GetList", mock.Anything, userID).Return([]*entity.Location{{ID: locationID, Name: "東京湾"}}, nil)
 			},
 			wantStatus: http.StatusOK,
+		},
+		{
+			name: "DB に繋がらない → 503",
+			setupMock: func(m *MockFavoriteUsecase) {
+				m.On("GetList", mock.Anything, userID).Return(nil, fmt.Errorf("finding: %w", domain.ErrDBUnavailable))
+			},
+			wantStatus: http.StatusServiceUnavailable,
 		},
 		{
 			name: "エラー → 500",
@@ -132,6 +140,14 @@ func TestFavoriteHandler_Add(t *testing.T) {
 			wantStatus: http.StatusConflict,
 		},
 		{
+			name: "DB に繋がらない → 503",
+			body: map[string]string{"location_id": locationID.String()},
+			setupMock: func(m *MockFavoriteUsecase) {
+				m.On("Add", mock.Anything, userID, locationID).Return(fmt.Errorf("finding: %w", domain.ErrDBUnavailable))
+			},
+			wantStatus: http.StatusServiceUnavailable,
+		},
+		{
 			name: "DBエラー → 500",
 			body: map[string]string{"location_id": locationID.String()},
 			setupMock: func(m *MockFavoriteUsecase) {
@@ -191,6 +207,14 @@ func TestFavoriteHandler_Delete(t *testing.T) {
 				m.On("Delete", mock.Anything, userID, locationID).Return(domain.ErrNotFound)
 			},
 			wantStatus: http.StatusNotFound,
+		},
+		{
+			name:    "DB に繋がらない → 503",
+			paramID: locationID.String(),
+			setupMock: func(m *MockFavoriteUsecase) {
+				m.On("Delete", mock.Anything, userID, locationID).Return(fmt.Errorf("finding: %w", domain.ErrDBUnavailable))
+			},
+			wantStatus: http.StatusServiceUnavailable,
 		},
 		{
 			name:    "DBエラー → 500",

@@ -110,7 +110,7 @@ func run() error {
 	// Handlers
 	handlers := &router.Handlers{
 		Auth:     handler.NewAuthHandler(authUC),
-		Weather:  handler.NewWeatherHandler(weatherUC),
+		Weather:  handler.NewWeatherHandler(weatherUC, cfg.External.OpenWeatherAPIKey != ""),
 		Tide:     handler.NewTideHandler(tideUC),
 		Location: handler.NewLocationHandler(locationUC),
 		Favorite: handler.NewFavoriteHandler(favoriteUC),

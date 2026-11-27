@@ -4,108 +4,141 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
+	"maps"
 	"net/http"
+	"net/url"
+	"slices"
+	"strings"
 	"time"
-	_ "time/tzdata"
 
+	"github.com/kazumadev619-dev/fishing-api/internal/domain"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
 )
 
-// TideClient は tide736.net の潮位 API クライアントのだ。
+// TideClient は tide736.net の潮位 API（get_tide.php）のクライアント。
 type TideClient struct {
 	baseURL string
-	client  *http.Client
+	fetch   *fetcher
 }
 
-// NewTideClient は本番用クライアントを返すのだ。
+// NewTideClient は本番用クライアントを返す。
 func NewTideClient() *TideClient {
-	return &TideClient{
-		baseURL: "https://tide736.net",
-		client:  newHTTPClient(),
-	}
+	return newTideClientWithHTTPClient("https://tide736.net", &http.Client{})
 }
 
 func newTideClientWithHTTPClient(baseURL string, httpClient *http.Client) *TideClient {
-	return &TideClient{baseURL: baseURL, client: httpClient}
+	return &TideClient{baseURL: baseURL, fetch: newFetcher(httpClient)}
 }
 
-type tideAPIResponse struct {
-	TideType  string `json:"tide_type"`
-	HighTides []struct {
-		Time   string  `json:"time"`
-		Height float64 `json:"height"`
-	} `json:"high_tides"`
-	LowTides []struct {
-		Time   string  `json:"time"`
-		Height float64 `json:"height"`
-	} `json:"low_tides"`
+// tide736Response は get_tide.php の応答。形は testdata/tide736_week.json を正とする。
+type tide736Response struct {
+	Status  int    `json:"status"` // 0: 異常終了、1: 正常終了
+	Message string `json:"message"`
+	Tide    struct {
+		Port struct {
+			PrefectureCode json.Number `json:"prefecture_code"`
+			HarborCode     json.Number `json:"harbor_code"`
+			HarborNameJ    string      `json:"harbor_namej"`
+		} `json:"port"`
+		Chart map[string]tide736Daily `json:"chart"`
+	} `json:"tide"`
 }
 
-// FetchTideData は指定した都道府県コード・港コード・日付の潮位データを取得するのだ。
-func (c *TideClient) FetchTideData(ctx context.Context, prefCode, portCode, date string) (*entity.TideData, error) {
-	url := fmt.Sprintf("%s/api/get_tide/%s/%s/%s/", c.baseURL, prefCode, portCode, date)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("creating tide request: %w", err)
-	}
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("tide API request failed: %w", err)
-	}
-	defer func() {
-		if cerr := resp.Body.Close(); cerr != nil {
-			slog.Warn("failed to close tide response body", "error", cerr)
-		}
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("tide API returned status %d", resp.StatusCode)
-	}
-
-	var data tideAPIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("failed to decode tide response: %w", err)
-	}
-
-	tideData := &entity.TideData{
-		PortCode: portCode,
-		Date:     date,
-		TideType: data.TideType,
-	}
-
-	loc, err := time.LoadLocation("Asia/Tokyo")
-	if err != nil {
-		return nil, fmt.Errorf("loading Asia/Tokyo location: %w", err)
-	}
-	dateBase, err := time.ParseInLocation("2006-01-02", date, loc)
-	if err != nil {
-		return nil, fmt.Errorf("parsing date %q: %w", date, err)
-	}
-
-	for _, h := range data.HighTides {
-		t, err := parseTimeOnDate(dateBase, h.Time, loc)
-		if err != nil {
-			continue
-		}
-		tideData.HighTides = append(tideData.HighTides, entity.TideEvent{Time: t, Height: h.Height})
-	}
-	for _, l := range data.LowTides {
-		t, err := parseTimeOnDate(dateBase, l.Time, loc)
-		if err != nil {
-			continue
-		}
-		tideData.LowTides = append(tideData.LowTides, entity.TideEvent{Time: t, Height: l.Height})
-	}
-
-	return tideData, nil
+type tide736Daily struct {
+	Sun struct {
+		AstroTwilight   []string `json:"astro_twilight"`
+		RegularTwilight []string `json:"regular_twilight"`
+		Rise            string   `json:"rise"`
+		Midline         string   `json:"midline"`
+		Set             string   `json:"set"`
+	} `json:"sun"`
+	Moon struct {
+		Brightness string  `json:"brightness"`
+		Age        string  `json:"age"`
+		Title      string  `json:"title"`
+		Rise       string  `json:"rise"`
+		Midline    string  `json:"midline"`
+		Set        string  `json:"set"`
+		Name       *string `json:"name"`
+	} `json:"moon"`
+	Tide  []tide736Event `json:"tide"`
+	Flood []tide736Event `json:"flood"`
+	Edd   []tide736Event `json:"edd"`
 }
 
-func parseTimeOnDate(base time.Time, timeStr string, loc *time.Location) (time.Time, error) {
-	t, err := time.ParseInLocation("15:04", timeStr, loc)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("parsing tide time %q: %w", timeStr, err)
+type tide736Event struct {
+	Time string  `json:"time"`
+	Unix int64   `json:"unix"`
+	CM   float64 `json:"cm"`
+}
+
+// FetchTideData は date（YYYY-MM-DD）から tideRange（day / week / month）の範囲の潮汐を取得する。
+func (c *TideClient) FetchTideData(ctx context.Context, prefCode, portCode, date, tideRange string) (*entity.TideData, error) {
+	ymd := strings.Split(date, "-")
+	if len(ymd) != 3 {
+		return nil, fmt.Errorf("invalid date %q", date)
 	}
-	return time.Date(base.Year(), base.Month(), base.Day(), t.Hour(), t.Minute(), 0, 0, loc), nil
+	q := url.Values{
+		"pc": {prefCode}, "hc": {portCode},
+		"yr": {ymd[0]}, "mn": {ymd[1]}, "dy": {ymd[2]},
+		"rg": {tideRange},
+	}
+
+	var raw tide736Response
+	if err := c.fetch.getJSON(ctx, c.baseURL+"/api/get_tide.php?"+q.Encode(), &raw); err != nil {
+		return nil, fmt.Errorf("tide736: %w", err)
+	}
+	if raw.Status != 1 {
+		return nil, fmt.Errorf("tide736: %w", domain.NewInvalidUpstreamResponse("tide736 API error: %s", raw.Message))
+	}
+	return toTideData(&raw), nil
+}
+
+func toTideData(raw *tide736Response) *entity.TideData {
+	dates := slices.Sorted(maps.Keys(raw.Tide.Chart)) // YYYY-MM-DD なので文字列の順が日付の順
+
+	days := make([]entity.DailyTide, 0, len(dates))
+	for _, d := range dates {
+		r := raw.Tide.Chart[d]
+		days = append(days, entity.DailyTide{
+			Date: d,
+			Sun: entity.SunInfo{
+				AstroTwilight:   r.Sun.AstroTwilight,
+				RegularTwilight: r.Sun.RegularTwilight,
+				Rise:            r.Sun.Rise,
+				Midline:         r.Sun.Midline,
+				Set:             r.Sun.Set,
+			},
+			Moon: entity.MoonInfo{
+				Brightness: r.Moon.Brightness,
+				Age:        r.Moon.Age,
+				Title:      r.Moon.Title,
+				Rise:       r.Moon.Rise,
+				Midline:    r.Moon.Midline,
+				Set:        r.Moon.Set,
+				Name:       r.Moon.Name,
+			},
+			Tide:  toTideEvents(r.Tide),
+			Flood: toTideEvents(r.Flood),
+			Ebb:   toTideEvents(r.Edd),
+		})
+	}
+
+	return &entity.TideData{
+		Port: entity.TidePort{
+			PrefectureCode: raw.Tide.Port.PrefectureCode.String(),
+			PortCode:       raw.Tide.Port.HarborCode.String(),
+			PortName:       raw.Tide.Port.HarborNameJ,
+		},
+		Days:     days,
+		DataTime: time.Now(),
+	}
+}
+
+func toTideEvents(in []tide736Event) []entity.TideEvent {
+	out := make([]entity.TideEvent, len(in))
+	for i, e := range in {
+		out[i] = entity.TideEvent{Time: e.Time, UnixMs: e.Unix, CM: e.CM}
+	}
+	return out
 }

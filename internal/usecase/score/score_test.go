@@ -31,10 +31,7 @@ func TestCalculate_GoodConditions(t *testing.T) {
 
 	// 大潮・満潮が60分前（仕様: 満潮1時間前）
 	highTideTime := now.Add(-60 * time.Minute)
-	tide := &entity.TideData{
-		TideType:  "大潮",
-		HighTides: []entity.TideEvent{{Time: highTideTime, Height: 180}},
-	}
+	tide := tideOf("大潮", []time.Time{highTideTime}, nil)
 	weather := &entity.WeatherData{
 		WindSpeed: 2.0,  // 穏やか
 		Pressure:  1013, // 基準気圧
@@ -64,11 +61,7 @@ func TestCalculate_PoorConditions(t *testing.T) {
 	now := timeAtHour(13) // 日中13時（最低時間帯）
 
 	// 潮汐イベントなし（nil tide ではなく空スライス）
-	tide := &entity.TideData{
-		TideType:  "小潮",
-		HighTides: []entity.TideEvent{},
-		LowTides:  []entity.TideEvent{},
-	}
+	tide := tideOf("小潮", nil, nil)
 	weather := &entity.WeatherData{
 		WindSpeed: 12.0, // 強風（>10m/s）
 		Pressure:  995,  // 低気圧（差18hPa）
@@ -257,10 +250,7 @@ func TestCalculateTideScore(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			eventTime := now.Add(time.Duration(-tt.minutesDiff) * time.Minute)
-			tide := &entity.TideData{
-				TideType:  tt.tideType,
-				HighTides: []entity.TideEvent{{Time: eventTime, Height: 150}},
-			}
+			tide := tideOf(tt.tideType, []time.Time{eventTime}, nil)
 			result := uc.Calculate(fixedWeather, tide, now)
 			assert.Equal(t, tt.wantTideScore, result.TideScore,
 				"tideType=%s minutesDiff=%.0f", tt.tideType, tt.minutesDiff)
@@ -279,10 +269,7 @@ func TestCalculate_TotalClamping(t *testing.T) {
 		// 最良条件：早朝4時 + 大潮 + 30分以内 + 無風基準気圧
 		now := timeAtHour(4)
 		eventTime := now.Add(-10 * time.Minute)
-		tide := &entity.TideData{
-			TideType:  "大潮",
-			HighTides: []entity.TideEvent{{Time: eventTime, Height: 200}},
-		}
+		tide := tideOf("大潮", []time.Time{eventTime}, nil)
 		weather := &entity.WeatherData{WindSpeed: 0, Pressure: 1013}
 
 		result := uc.Calculate(weather, tide, now)
@@ -292,11 +279,7 @@ func TestCalculate_TotalClamping(t *testing.T) {
 	t.Run("合計は0未満にならない", func(t *testing.T) {
 		// 最悪条件：暴風・極低気圧
 		now := timeAtHour(13)
-		tide := &entity.TideData{
-			TideType:  "小潮",
-			HighTides: []entity.TideEvent{},
-			LowTides:  []entity.TideEvent{},
-		}
+		tide := tideOf("小潮", nil, nil)
 		weather := &entity.WeatherData{WindSpeed: 20.0, Pressure: 960}
 
 		result := uc.Calculate(weather, tide, now)
@@ -328,11 +311,7 @@ func TestCalculate_EmptyTideEvents(t *testing.T) {
 	now := timeAtHour(10)
 
 	// イベントが空スライス（nil でない）の場合
-	tide := &entity.TideData{
-		TideType:  "小潮",
-		HighTides: []entity.TideEvent{},
-		LowTides:  []entity.TideEvent{},
-	}
+	tide := tideOf("小潮", nil, nil)
 	weather := &entity.WeatherData{WindSpeed: 0, Pressure: 1013}
 
 	result := uc.Calculate(weather, tide, now)
@@ -352,11 +331,7 @@ func TestCalculate_LowTidesOnly(t *testing.T) {
 
 	// 干潮イベントのみ（高潮イベントなし）
 	eventTime := now.Add(-25 * time.Minute)
-	tide := &entity.TideData{
-		TideType:  "",
-		HighTides: []entity.TideEvent{},
-		LowTides:  []entity.TideEvent{{Time: eventTime, Height: 20}},
-	}
+	tide := tideOf("", nil, []time.Time{eventTime})
 	weather := &entity.WeatherData{WindSpeed: 0, Pressure: 1013}
 
 	result := uc.Calculate(weather, tide, now)
@@ -374,10 +349,7 @@ func TestCalculate_ExplanationContent(t *testing.T) {
 	now := timeAtHour(6)
 
 	eventTime := now.Add(-20 * time.Minute)
-	tide := &entity.TideData{
-		TideType:  "大潮",
-		HighTides: []entity.TideEvent{{Time: eventTime, Height: 180}},
-	}
+	tide := tideOf("大潮", []time.Time{eventTime}, nil)
 	weather := &entity.WeatherData{
 		WindSpeed: 2.5,
 		Pressure:  1013,
@@ -387,4 +359,20 @@ func TestCalculate_ExplanationContent(t *testing.T) {
 
 	assert.Contains(t, result.Explanation, "大潮", "Explanation に潮回りを含む")
 	assert.Contains(t, result.Explanation, "2.5", "Explanation に風速を含む")
+}
+
+// tideOf は潮回りと満潮・干潮の時刻だけを持つ1日分の潮汐を作る。
+func tideOf(name string, flood, ebb []time.Time) *entity.TideData {
+	toEvents := func(ts []time.Time) []entity.TideEvent {
+		out := make([]entity.TideEvent, len(ts))
+		for i, t := range ts {
+			out[i] = entity.TideEvent{UnixMs: t.UnixMilli()}
+		}
+		return out
+	}
+	return &entity.TideData{Days: []entity.DailyTide{{
+		Moon:  entity.MoonInfo{Title: name},
+		Flood: toEvents(flood),
+		Ebb:   toEvents(ebb),
+	}}}
 }

@@ -3,6 +3,7 @@ package score
 import (
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
@@ -54,15 +55,13 @@ func (u *ScoreUsecase) calculateTideScore(tide *entity.TideData, now time.Time) 
 		return maxTideScore / 2
 	}
 
-	allEvents := make([]entity.TideEvent, 0, len(tide.HighTides)+len(tide.LowTides))
-	allEvents = append(allEvents, tide.HighTides...)
-	allEvents = append(allEvents, tide.LowTides...)
-
 	minMinutes := math.MaxFloat64
-	for _, event := range allEvents {
-		diff := math.Abs(now.Sub(event.Time).Minutes())
-		if diff < minMinutes {
-			minMinutes = diff
+	for _, day := range tide.Days {
+		for _, event := range slices.Concat(day.Flood, day.Ebb) {
+			diff := math.Abs(now.Sub(time.UnixMilli(event.UnixMs)).Minutes())
+			if diff < minMinutes {
+				minMinutes = diff
+			}
 		}
 	}
 
@@ -81,7 +80,7 @@ func (u *ScoreUsecase) calculateTideScore(tide *entity.TideData, now time.Time) 
 	}
 
 	bonus := 0
-	switch tide.TideType {
+	switch tideName(tide) {
 	case "大潮":
 		bonus = 5
 	case "中潮":
@@ -155,12 +154,21 @@ func (u *ScoreUsecase) generateExplanation(
 ) string {
 	explanation := fmt.Sprintf("釣りやすさスコア：潮汐%d点＋天気%d点＋時間帯%d点", tideScore, weatherScore, timeScore)
 
-	if tide != nil && tide.TideType != "" {
-		explanation += fmt.Sprintf("。潮回り：%s", tide.TideType)
+	if name := tideName(tide); name != "" {
+		explanation += fmt.Sprintf("。潮回り：%s", name)
 	}
 	if weather != nil {
 		explanation += fmt.Sprintf("。風速：%.1fm/s", weather.WindSpeed)
 	}
 
 	return explanation
+}
+
+// tideName は最初の日の潮回り（大潮・中潮など）。無ければ空文字。
+// ponytail: 式は #27 で Next の式に置き換えるまでの仮の合わせ。
+func tideName(tide *entity.TideData) string {
+	if tide == nil || len(tide.Days) == 0 {
+		return ""
+	}
+	return tide.Days[0].Moon.Title
 }
