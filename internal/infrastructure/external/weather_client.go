@@ -97,11 +97,11 @@ func (c *WeatherClient) FetchCurrent(ctx context.Context, lat, lon float64, unit
 	}
 	switch {
 	case raw.Wind == nil || raw.Wind.Speed == nil:
-		return nil, domain.NewInvalidUpstreamResponse("OpenWeatherMap returned an invalid wind.speed")
+		return nil, fmt.Errorf("openweathermap current: %w", domain.NewInvalidUpstreamResponse("invalid wind.speed"))
 	case raw.Main == nil || raw.Main.Pressure == nil:
-		return nil, domain.NewInvalidUpstreamResponse("OpenWeatherMap returned an invalid main.pressure")
+		return nil, fmt.Errorf("openweathermap current: %w", domain.NewInvalidUpstreamResponse("invalid main.pressure"))
 	case len(raw.Weather) == 0:
-		return nil, domain.NewInvalidUpstreamResponse("OpenWeatherMap returned no weather condition")
+		return nil, fmt.Errorf("openweathermap current: %w", domain.NewInvalidUpstreamResponse("no weather condition"))
 	}
 
 	w := &entity.WeatherData{

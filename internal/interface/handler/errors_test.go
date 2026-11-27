@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,7 +60,7 @@ func TestRespondClassifiedError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(w)
-			c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+			c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 
 			ok := respondClassifiedError(c, tt.err, nil)
 
@@ -79,7 +80,7 @@ func TestRespondClassifiedError_ExtraFields(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request = httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 
 	respondClassifiedError(c, &domain.UpstreamError{Kind: domain.UpstreamServerError}, gin.H{"success": false})
 

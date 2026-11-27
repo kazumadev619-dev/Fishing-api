@@ -40,7 +40,7 @@ func serveWeather(m *MockWeatherUsecase, url string) *httptest.ResponseRecorder 
 	r := gin.New()
 	r.GET("/api/weather", NewWeatherHandler(m).Get)
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+	r.ServeHTTP(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, url, nil))
 	return w
 }
 

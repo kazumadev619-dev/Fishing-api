@@ -31,7 +31,7 @@ func serveTide(m *MockTideUsecase, url string) *httptest.ResponseRecorder {
 	r := gin.New()
 	r.GET("/api/conditions/tide", NewTideHandler(m).Get)
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+	r.ServeHTTP(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, url, nil))
 	return w
 }
 

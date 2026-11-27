@@ -63,7 +63,7 @@ func (f *fetcher) getJSON(ctx context.Context, rawURL string, out any) error {
 		body, err := f.attempt(ctx, rawURL)
 		if err == nil {
 			if jerr := json.Unmarshal(body, out); jerr != nil {
-				return domain.NewInvalidUpstreamResponse("decoding upstream response: %w", jerr)
+				return fmt.Errorf("decoding upstream response: %w", domain.NewInvalidUpstreamResponse("%w", jerr))
 			}
 			return nil
 		}
