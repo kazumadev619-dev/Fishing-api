@@ -21,6 +21,7 @@ func New(handlers *Handlers, jwtManager *jwtutil.Manager) *gin.Engine {
 	r.Use(gin.Recovery())
 
 	r.GET("/health", handler.HealthCheck)
+	handler.RegisterOpenAPI(r, handlers.Weather, handlers.Tide)
 
 	api := r.Group("/api")
 	{
@@ -32,8 +33,6 @@ func New(handlers *Handlers, jwtManager *jwtutil.Manager) *gin.Engine {
 			authGroup.GET("/verify-email", handlers.Auth.VerifyEmail)
 		}
 
-		api.GET("/weather", handlers.Weather.Get)
-		api.GET("/conditions/tide", handlers.Tide.Get)
 		api.GET("/locations/search", handlers.Location.Search)
 
 		protected := api.Group("").Use(middleware.JWTAuth(jwtManager))

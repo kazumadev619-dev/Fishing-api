@@ -28,6 +28,16 @@ func RoundCoordinate(value float64, precision int) float64 {
 	return math.Round(value*p) / p
 }
 
+func ValidateCoordinates(lat, lon float64) error {
+	if math.IsNaN(lat) || lat < -90 || lat > 90 {
+		return fmt.Errorf("lat must be between -90 and 90")
+	}
+	if math.IsNaN(lon) || lon < -180 || lon > 180 {
+		return fmt.Errorf("lon must be between -180 and 180")
+	}
+	return nil
+}
+
 func ParseAndValidateCoordinates(latStr, lonStr string) (float64, float64, error) {
 	if latStr == "" || lonStr == "" {
 		return 0, 0, fmt.Errorf("lat and lon are required")
@@ -43,11 +53,8 @@ func ParseAndValidateCoordinates(latStr, lonStr string) (float64, float64, error
 		return 0, 0, fmt.Errorf("invalid lon: %w", err)
 	}
 
-	if lat < -90 || lat > 90 {
-		return 0, 0, fmt.Errorf("lat must be between -90 and 90")
-	}
-	if lon < -180 || lon > 180 {
-		return 0, 0, fmt.Errorf("lon must be between -180 and 180")
+	if err := ValidateCoordinates(lat, lon); err != nil {
+		return 0, 0, err
 	}
 
 	return lat, lon, nil

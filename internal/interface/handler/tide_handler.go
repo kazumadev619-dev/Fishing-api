@@ -8,8 +8,8 @@ import (
 	"slices"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
+	"github.com/kazumadev619-dev/fishing-api/internal/interface/openapi"
 )
 
 type TideFetcher interface {
@@ -32,70 +32,26 @@ var (
 	jst = time.FixedZone("JST", 9*60*60)
 )
 
-// 応答の形は Next の /api/conditions/tide（src/lib/tideService.ts の FormattedTideData）と同じ。
-type tideResponse struct {
-	Status int       `json:"status"`
-	Data   tideBody  `json:"data"`
-	Meta   cacheMeta `json:"meta"`
+func tideBadRequest(msg string) openapi.GetTide400JSONResponse {
+	status := http.StatusBadRequest
+	return openapi.GetTide400JSONResponse{
+		ErrorJSONResponse: openapi.ErrorJSONResponse{
+			Error:  msg,
+			Status: &status,
+		},
+	}
 }
 
-type cacheMeta struct {
-	FromCache bool   `json:"fromCache"`
-	FetchedAt string `json:"fetchedAt"`
-}
-
-type tideBody struct {
-	Port struct {
-		PrefectureCode string `json:"prefecture_code"`
-		PortCode       string `json:"port_code"`
-		PortName       string `json:"port_name"`
-	} `json:"port"`
-	Tides    []tideDay `json:"tides"`
-	DataTime string    `json:"dataTime"`
-}
-
-type tideDay struct {
-	Date  string `json:"date"`
-	Daily struct {
-		Sun struct {
-			AstroTwilight   []string `json:"astro_twilight"`
-			RegularTwilight []string `json:"regular_twilight"`
-			Rise            string   `json:"rise"`
-			Midline         string   `json:"midline"`
-			Set             string   `json:"set"`
-		} `json:"sun"`
-		Moon struct {
-			Brightness string  `json:"brightness"`
-			Age        string  `json:"age"`
-			Title      string  `json:"title"`
-			Rise       string  `json:"rise"`
-			Midline    string  `json:"midline"`
-			Set        string  `json:"set"`
-			Name       *string `json:"name"`
-		} `json:"moon"`
-		Tide  []tideEvent `json:"tide"`
-		Flood []tideEvent `json:"flood"`
-		Edd   []tideEvent `json:"edd"`
-	} `json:"daily"`
-}
-
-type tideEvent struct {
-	Time string  `json:"time"`
-	Unix int64   `json:"unix"`
-	CM   float64 `json:"cm"`
-}
-
-// tideQuery はクエリを読み、既定値（range は week、date は JST の今日）を入れて確かめる。
+// tideQuery はクエリを受け取り、既定値（range は week、date は JST の今日）を入れて確かめる。
 // 不正なら Next と同じ文言を返す。
-func tideQuery(c *gin.Context) (prefCode, portCode, date, tideRange, errMsg string) {
-	prefCode, portCode = c.Query("prefectureCode"), c.Query("portCode")
-	date, tideRange = c.Query("date"), c.Query("range")
+func tideQuery(prefCode, portCode, date, tideRange string) (string, string, string, string, string) {
 	if date == "" {
 		date = time.Now().In(jst).Format("2006-01-02")
 	}
 	if tideRange == "" {
 		tideRange = "week"
 	}
+	var errMsg string
 	switch {
 	case prefCode == "":
 		errMsg = "Missing required parameter: prefectureCode"
@@ -113,34 +69,50 @@ func tideQuery(c *gin.Context) (prefCode, portCode, date, tideRange, errMsg stri
 	return prefCode, portCode, date, tideRange, errMsg
 }
 
-func (h *TideHandler) Get(c *gin.Context) {
-	prefCode, portCode, date, tideRange, errMsg := tideQuery(c)
-	if errMsg != "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": errMsg, "status": http.StatusBadRequest})
-		return
+func (h *TideHandler) GetTide(ctx context.Context, req openapi.GetTideRequestObject) (openapi.GetTideResponseObject, error) {
+	reqCtx, path := requestContext(ctx)
+
+	var dateParam, rangeParam string
+	if req.Params.Date != nil {
+		dateParam = *req.Params.Date
+	}
+	if req.Params.Range != nil {
+		rangeParam = string(*req.Params.Range)
 	}
 
-	data, fromCache, err := h.usecase.GetTideData(c.Request.Context(), prefCode, portCode, date, tideRange)
+	prefCode, portCode, date, tideRange, errMsg := tideQuery(req.Params.PrefectureCode, req.Params.PortCode, dateParam, rangeParam)
+	if errMsg != "" {
+		return tideBadRequest(errMsg), nil
+	}
+
+	data, fromCache, err := h.usecase.GetTideData(reqCtx, prefCode, portCode, date, tideRange)
 	if err != nil {
-		if respondClassifiedError(c, err, nil) {
-			return
+		if status, resp, ok := classifyError(reqCtx, path, err); ok {
+			return tideStatusFromClassified(status, resp), nil
 		}
-		slog.ErrorContext(c.Request.Context(), "Tide API error", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch tide data", "status": http.StatusInternalServerError})
-		return
+		slog.ErrorContext(reqCtx, "Tide API error", "error", err)
+		status := http.StatusInternalServerError
+		return openapi.GetTide500JSONResponse{
+			Error:  "Failed to fetch tide data",
+			Status: &status,
+		}, nil
 	}
 
 	// private にする。認証が要るルートなので、共有キャッシュに保存させない（Next と同じ）。
+	cacheControl := "private, max-age=300"
 	if fromCache {
-		c.Header("Cache-Control", "private, max-age=3600")
-	} else {
-		c.Header("Cache-Control", "private, max-age=300")
+		cacheControl = "private, max-age=3600"
 	}
-	c.JSON(http.StatusOK, tideResponse{
-		Status: http.StatusOK,
-		Data:   toTideBody(data),
-		Meta:   cacheMeta{FromCache: fromCache, FetchedAt: isoTime(time.Now())},
-	})
+	return openapi.GetTide200JSONResponse{
+		Body: openapi.TideResponse{
+			Status: openapi.N200,
+			Data:   toTideData(data),
+			Meta:   openapi.CacheMeta{FromCache: fromCache, FetchedAt: isoTime(time.Now())},
+		},
+		Headers: openapi.GetTide200ResponseHeaders{
+			CacheControl: cacheControl,
+		},
+	}, nil
 }
 
 // isValidDate は YYYY-MM-DD で、実在する日かを確かめる（time.Parse は 2 月 30 日を拒否する）。
@@ -149,39 +121,49 @@ func isValidDate(s string) bool {
 	return err == nil
 }
 
-func toTideBody(d *entity.TideData) tideBody {
-	var b tideBody
-	b.Port.PrefectureCode = d.Port.PrefectureCode
-	b.Port.PortCode = d.Port.PortCode
-	b.Port.PortName = d.Port.PortName
-	b.DataTime = isoTime(d.DataTime)
-	b.Tides = make([]tideDay, len(d.Days))
+func toTideData(d *entity.TideData) openapi.TideData {
+	tides := make([]openapi.TideDay, len(d.Days))
 	for i, day := range d.Days {
-		t := &b.Tides[i]
-		t.Date = day.Date
-		t.Daily.Sun.AstroTwilight = day.Sun.AstroTwilight
-		t.Daily.Sun.RegularTwilight = day.Sun.RegularTwilight
-		t.Daily.Sun.Rise = day.Sun.Rise
-		t.Daily.Sun.Midline = day.Sun.Midline
-		t.Daily.Sun.Set = day.Sun.Set
-		t.Daily.Moon.Brightness = day.Moon.Brightness
-		t.Daily.Moon.Age = day.Moon.Age
-		t.Daily.Moon.Title = day.Moon.Title
-		t.Daily.Moon.Rise = day.Moon.Rise
-		t.Daily.Moon.Midline = day.Moon.Midline
-		t.Daily.Moon.Set = day.Moon.Set
-		t.Daily.Moon.Name = day.Moon.Name
-		t.Daily.Tide = toTideEvents(day.Tide)
-		t.Daily.Flood = toTideEvents(day.Flood)
-		t.Daily.Edd = toTideEvents(day.Ebb)
+		tides[i] = openapi.TideDay{
+			Date: day.Date,
+			Daily: openapi.TideDaily{
+				Sun: openapi.TideSun{
+					AstroTwilight:   day.Sun.AstroTwilight,
+					RegularTwilight: day.Sun.RegularTwilight,
+					Rise:            day.Sun.Rise,
+					Midline:         day.Sun.Midline,
+					Set:             day.Sun.Set,
+				},
+				Moon: openapi.TideMoon{
+					Brightness: day.Moon.Brightness,
+					Age:        day.Moon.Age,
+					Title:      day.Moon.Title,
+					Rise:       day.Moon.Rise,
+					Midline:    day.Moon.Midline,
+					Set:        day.Moon.Set,
+					Name:       day.Moon.Name,
+				},
+				Tide:  toTideEvents(day.Tide),
+				Flood: toTideEvents(day.Flood),
+				Edd:   toTideEvents(day.Ebb),
+			},
+		}
 	}
-	return b
+	return openapi.TideData{
+		Port: openapi.TidePort{
+			PrefectureCode: d.Port.PrefectureCode,
+			PortCode:       d.Port.PortCode,
+			PortName:       d.Port.PortName,
+		},
+		Tides:    tides,
+		DataTime: isoTime(d.DataTime),
+	}
 }
 
-func toTideEvents(in []entity.TideEvent) []tideEvent {
-	out := make([]tideEvent, len(in))
+func toTideEvents(in []entity.TideEvent) []openapi.TideEvent {
+	out := make([]openapi.TideEvent, len(in))
 	for i, e := range in {
-		out[i] = tideEvent{Time: e.Time, Unix: e.UnixMs, CM: e.CM}
+		out[i] = openapi.TideEvent{Time: e.Time, Unix: e.UnixMs, Cm: e.CM}
 	}
 	return out
 }

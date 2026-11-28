@@ -3,13 +3,14 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/kazumadev619-dev/fishing-api/internal/domain/entity"
+	"github.com/kazumadev619-dev/fishing-api/internal/interface/openapi"
 	"github.com/kazumadev619-dev/fishing-api/pkg/validator"
 )
 
@@ -29,115 +30,135 @@ func NewWeatherHandler(uc WeatherFetcher, apiConfigured bool) *WeatherHandler {
 
 var weatherUnits = []string{"standard", "metric", "imperial"}
 
-// 応答の形は Next の /api/weather（src/lib/openWeatherService.ts の FormattedWeatherData）と同じ。
-type weatherResponse struct {
-	Success   bool   `json:"success"`
-	Type      string `json:"type"`
-	Data      any    `json:"data"`
-	FromCache bool   `json:"fromCache"`
-	FetchedAt string `json:"fetchedAt"`
+func weatherBadRequest(msg string) openapi.GetWeather400JSONResponse {
+	code := openapi.INVALIDPARAMS
+	status := http.StatusBadRequest
+	return openapi.GetWeather400JSONResponse{
+		WeatherErrorJSONResponse: openapi.WeatherErrorJSONResponse{
+			Error:  msg,
+			Code:   &code,
+			Status: &status,
+		},
+	}
 }
 
-type weatherBody struct {
-	Coordinates struct {
-		Lat float64 `json:"lat"`
-		Lon float64 `json:"lon"`
-	} `json:"coordinates"`
-	CityName    string   `json:"cityName"`
-	Country     string   `json:"country"`
-	Temperature float64  `json:"temperature"`
-	FeelsLike   float64  `json:"feelsLike"`
-	TempMin     float64  `json:"tempMin"`
-	TempMax     float64  `json:"tempMax"`
-	Humidity    int      `json:"humidity"`
-	Pressure    float64  `json:"pressure"`
-	WindSpeed   float64  `json:"windSpeed"`
-	WindDeg     int      `json:"windDeg"`
-	WindGust    *float64 `json:"windGust,omitempty"`
-	Cloudiness  int      `json:"cloudiness"`
-	Visibility  int      `json:"visibility"`
-	Weather     struct {
-		ID          int    `json:"id"`
-		Main        string `json:"main"`
-		Description string `json:"description"`
-		Icon        string `json:"icon"`
-	} `json:"weather"`
-	Rain     *float64 `json:"rain,omitempty"`
-	Snow     *float64 `json:"snow,omitempty"`
-	Sunrise  string   `json:"sunrise"`
-	Sunset   string   `json:"sunset"`
-	DataTime string   `json:"dataTime"`
-	Timezone int      `json:"timezone"`
+func weatherNotConfigured(ctx context.Context) openapi.GetWeather503JSONResponse {
+	slog.ErrorContext(ctx, "OPENWEATHER_API_KEY is not configured")
+	code := openapi.APINOTCONFIGURED
+	status := http.StatusServiceUnavailable
+	return openapi.GetWeather503JSONResponse{
+		Error:  "Weather API is not configured",
+		Code:   &code,
+		Status: &status,
+	}
 }
 
-func badWeatherRequest(c *gin.Context, msg string) {
-	c.JSON(http.StatusBadRequest, gin.H{"error": msg, "code": "INVALID_PARAMS", "status": http.StatusBadRequest})
-}
+func (h *WeatherHandler) GetWeather(ctx context.Context, req openapi.GetWeatherRequestObject) (openapi.GetWeatherResponseObject, error) {
+	reqCtx, path := requestContext(ctx)
 
-func (h *WeatherHandler) Get(c *gin.Context) {
 	// Next と同じく、クエリの検証とキャッシュより前に確かめる。
 	if !h.apiConfigured {
-		slog.ErrorContext(c.Request.Context(), "OPENWEATHER_API_KEY is not configured")
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Weather API is not configured", "code": "API_NOT_CONFIGURED", "status": http.StatusServiceUnavailable})
-		return
+		return weatherNotConfigured(reqCtx), nil
 	}
-	lat, lon, err := validator.ParseAndValidateCoordinates(c.Query("lat"), c.Query("lon"))
-	if err != nil {
-		badWeatherRequest(c, err.Error())
-		return
+	if err := validator.ValidateCoordinates(req.Params.Lat, req.Params.Lon); err != nil {
+		return weatherBadRequest(err.Error()), nil
 	}
-	weatherType := c.DefaultQuery("type", "current")
+
+	weatherType := string(openapi.GetWeatherParamsTypeCurrent)
+	if req.Params.Type != nil && *req.Params.Type != "" {
+		weatherType = string(*req.Params.Type)
+	}
 	if weatherType != "current" && weatherType != "forecast" {
-		badWeatherRequest(c, `typeは "current" または "forecast" である必要があります`)
-		return
+		return weatherBadRequest(`typeは "current" または "forecast" である必要があります`), nil
 	}
-	units := c.DefaultQuery("units", "metric")
+
+	units := string(openapi.Metric)
+	if req.Params.Units != nil && *req.Params.Units != "" {
+		units = string(*req.Params.Units)
+	}
 	if !slices.Contains(weatherUnits, units) {
-		badWeatherRequest(c, `unitsは "standard", "metric", または "imperial" である必要があります`)
-		return
+		return weatherBadRequest(`unitsは "standard", "metric", または "imperial" である必要があります`), nil
 	}
 
-	ctx := c.Request.Context()
-	var (
-		data      any
-		fromCache bool
-	)
 	if weatherType == "forecast" {
-		data, fromCache, err = h.usecase.GetForecast(ctx, lat, lon, units)
-	} else {
-		var w *entity.WeatherData
-		w, fromCache, err = h.usecase.GetCurrent(ctx, lat, lon, units)
-		if err == nil {
-			data = toWeatherBody(w)
+		raw, fromCache, err := h.usecase.GetForecast(reqCtx, req.Params.Lat, req.Params.Lon, units)
+		if err != nil {
+			return h.handleWeatherError(reqCtx, path, err), nil
 		}
-	}
-	if err != nil {
-		if respondClassifiedError(c, err, gin.H{"success": false}) {
-			return
+		var resp openapi.WeatherResponse
+		if err := resp.FromWeatherForecastResponse(openapi.WeatherForecastResponse{
+			Success:   true,
+			Type:      openapi.WeatherForecastResponseTypeForecast,
+			Data:      raw,
+			FromCache: fromCache,
+			FetchedAt: isoTime(time.Now()),
+		}); err != nil {
+			return nil, fmt.Errorf("marshaling weather forecast response: %w", err)
 		}
-		slog.ErrorContext(ctx, "Weather API unexpected error", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": "天気データの取得中にエラーが発生しました", "code": "INTERNAL_ERROR"})
-		return
+		return openapi.GetWeather200JSONResponse(resp), nil
 	}
 
-	c.JSON(http.StatusOK, weatherResponse{
-		Success: true, Type: weatherType, Data: data, FromCache: fromCache, FetchedAt: isoTime(time.Now()),
-	})
+	w, fromCache, err := h.usecase.GetCurrent(reqCtx, req.Params.Lat, req.Params.Lon, units)
+	if err != nil {
+		return h.handleWeatherError(reqCtx, path, err), nil
+	}
+	var resp openapi.WeatherResponse
+	if err := resp.FromWeatherCurrentResponse(openapi.WeatherCurrentResponse{
+		Success:   true,
+		Type:      openapi.WeatherCurrentResponseTypeCurrent,
+		Data:      toWeatherCurrent(w),
+		FromCache: fromCache,
+		FetchedAt: isoTime(time.Now()),
+	}); err != nil {
+		return nil, fmt.Errorf("marshaling weather current response: %w", err)
+	}
+	return openapi.GetWeather200JSONResponse(resp), nil
 }
 
-func toWeatherBody(w *entity.WeatherData) weatherBody {
-	b := weatherBody{
-		CityName: w.CityName, Country: w.Country,
-		Temperature: w.Temperature, FeelsLike: w.FeelsLike, TempMin: w.TempMin, TempMax: w.TempMax,
-		Humidity: w.Humidity, Pressure: w.Pressure,
-		WindSpeed: w.WindSpeed, WindDeg: w.WindDeg, WindGust: w.WindGust,
-		Cloudiness: w.Cloudiness, Visibility: w.Visibility,
-		Rain: w.Rain, Snow: w.Snow,
-		Sunrise: isoTime(w.Sunrise), Sunset: isoTime(w.Sunset), DataTime: isoTime(w.DateTime),
+func (h *WeatherHandler) handleWeatherError(ctx context.Context, path string, err error) openapi.GetWeatherResponseObject {
+	if status, resp, ok := classifyError(ctx, path, err); ok {
+		return weatherStatusFromClassified(status, resp)
+	}
+	slog.ErrorContext(ctx, "Weather API unexpected error", "error", err)
+	f := false
+	code := openapi.INTERNALERROR
+	return openapi.GetWeather500JSONResponse{
+		Success: &f,
+		Error:   "天気データの取得中にエラーが発生しました",
+		Code:    &code,
+	}
+}
+
+func toWeatherCurrent(w *entity.WeatherData) openapi.WeatherCurrent {
+	return openapi.WeatherCurrent{
+		Coordinates: openapi.Coordinates{
+			Lat: w.Lat,
+			Lon: w.Lon,
+		},
+		CityName:    w.CityName,
+		Country:     w.Country,
+		Temperature: w.Temperature,
+		FeelsLike:   w.FeelsLike,
+		TempMin:     w.TempMin,
+		TempMax:     w.TempMax,
+		Humidity:    w.Humidity,
+		Pressure:    w.Pressure,
+		WindSpeed:   w.WindSpeed,
+		WindDeg:     w.WindDeg,
+		WindGust:    w.WindGust,
+		Cloudiness:  w.Cloudiness,
+		Visibility:  w.Visibility,
+		Weather: openapi.WeatherCondition{
+			Id:          w.Condition.ID,
+			Main:        w.Condition.Main,
+			Description: w.Condition.Description,
+			Icon:        w.Condition.Icon,
+		},
+		Rain:     w.Rain,
+		Snow:     w.Snow,
+		Sunrise:  isoTime(w.Sunrise),
+		Sunset:   isoTime(w.Sunset),
+		DataTime: isoTime(w.DateTime),
 		Timezone: w.Timezone,
 	}
-	b.Coordinates.Lat, b.Coordinates.Lon = w.Lat, w.Lon
-	b.Weather.ID, b.Weather.Main = w.Condition.ID, w.Condition.Main
-	b.Weather.Description, b.Weather.Icon = w.Condition.Description, w.Condition.Icon
-	return b
 }
