@@ -1,0 +1,6 @@
+package: openapi
+output: internal/interface/openapi/openapi.gen.go
+generate:
+  models: true
+  gin-server: true
+  strict-server: true

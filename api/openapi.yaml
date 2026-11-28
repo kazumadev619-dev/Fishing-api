@@ -1,0 +1,301 @@
+# Fishing-api の HTTP API の仕様。Go（oapi-codegen）と Next（openapi-typescript）の型は、ここから生成する。
+# 範囲は段ごとに広げる（ADR 0008）。いまは段2で Next に合わせた weather と tide だけを書く。
+openapi: 3.0.3
+info:
+  title: Fishing-api
+  version: 0.1.0
+  description: |
+    FishingConditionsApp のバックエンド。応答の形は Next の Route Handler と同じにする（ADR 0006）。
+    エラーの3分類は Next の docs/reference/api-error-handling.md に従う。
+    上流の失敗は 502、上流のタイムアウトは 504、DB の接続の失敗と設定の不足は 503 にする。
+paths:
+  /api/weather:
+    get:
+      operationId: getWeather
+      summary: 現在の天気か5日間の予報
+      description: |
+        OpenWeatherMap のキーが無ければ、クエリを確かめる前に 503（API_NOT_CONFIGURED）を返す。
+        クエリの誤りは、lat と lon、type、units の順に確かめる。
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number, format: double, minimum: -90, maximum: 90 }
+        - name: lon
+          in: query
+          required: true
+          schema: { type: number, format: double, minimum: -180, maximum: 180 }
+        - name: type
+          in: query
+          schema: { type: string, enum: [current, forecast], default: current }
+        - name: units
+          in: query
+          schema: { type: string, enum: [standard, metric, imperial], default: metric }
+      responses:
+        "200":
+          description: 成功。type が current なら data は整形した天気、forecast なら上流の応答そのもの
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WeatherResponse" }
+        "400": { $ref: "#/components/responses/WeatherError" }
+        "500": { $ref: "#/components/responses/WeatherError" }
+        "502": { $ref: "#/components/responses/WeatherError" }
+        "503": { $ref: "#/components/responses/WeatherError" }
+        "504": { $ref: "#/components/responses/WeatherError" }
+  /api/conditions/tide:
+    get:
+      operationId: getTide
+      summary: 港の潮汐
+      description: クエリの誤りは、prefectureCode と portCode の有無、それぞれの形、date、range の順に確かめる。
+      parameters:
+        - name: prefectureCode
+          in: query
+          required: true
+          schema: { type: string, pattern: "^[0-9]{1,2}$" }
+        - name: portCode
+          in: query
+          required: true
+          schema: { type: string, pattern: "^[a-zA-Z0-9]+$" }
+        - name: date
+          in: query
+          description: 省略すると JST の今日
+          schema: { type: string, format: date, x-go-type: string }
+        - name: range
+          in: query
+          schema: { type: string, enum: [day, week, month], default: week }
+      responses:
+        "200":
+          description: 成功
+          headers:
+            Cache-Control:
+              description: キャッシュから返したら private, max-age=3600、上流から取ったら private, max-age=300
+              required: true
+              schema: { type: string, enum: ["private, max-age=3600", "private, max-age=300"] }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TideResponse" }
+        "400": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "502": { $ref: "#/components/responses/Error" }
+        "503": { $ref: "#/components/responses/Error" }
+        "504": { $ref: "#/components/responses/Error" }
+components:
+  responses:
+    Error:
+      description: エラー
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+    WeatherError:
+      description: エラー。400 と 503 以外（500・502・504）は success が false
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: 利用者向けの文言。502・503・504 は code ごとの固定文言で、上流の本文は入れない
+        code: { $ref: "#/components/schemas/ErrorCode" }
+        status:
+          type: integer
+          description: HTTP のステータス。400 と 500 の一部と API_NOT_CONFIGURED だけに付く
+        success:
+          type: boolean
+          description: weather の 500・502・504 だけに付き、値は false
+        retryable:
+          type: boolean
+          description: 502・504 だけに付く。同じ要求をもう一度送ってよいか
+    ErrorCode:
+      type: string
+      description: |
+        INVALID_PARAMS はクエリの誤り（400）、INTERNAL_ERROR は分類できない失敗（500）。
+        TIMEOUT は 504、ほかの上流の失敗（RATE_LIMITED・SERVER_ERROR・CLIENT_ERROR・NETWORK_ERROR）は 502。
+        API_NOT_CONFIGURED と DB_UNAVAILABLE は 503。
+      enum:
+        - INVALID_PARAMS
+        - INTERNAL_ERROR
+        - API_NOT_CONFIGURED
+        - DB_UNAVAILABLE
+        - TIMEOUT
+        - RATE_LIMITED
+        - SERVER_ERROR
+        - CLIENT_ERROR
+        - NETWORK_ERROR
+    Timestamp:
+      type: string
+      format: date-time
+      description: UTC、ミリ秒まで（JavaScript の Date#toJSON と同じ形）
+      x-go-type: string
+    WeatherResponse:
+      oneOf:
+        - $ref: "#/components/schemas/WeatherCurrentResponse"
+        - $ref: "#/components/schemas/WeatherForecastResponse"
+      discriminator:
+        propertyName: type
+        mapping:
+          current: "#/components/schemas/WeatherCurrentResponse"
+          forecast: "#/components/schemas/WeatherForecastResponse"
+    WeatherCurrentResponse:
+      type: object
+      required: [success, type, data, fromCache, fetchedAt]
+      properties:
+        success: { type: boolean }
+        type: { type: string, enum: [current] }
+        data: { $ref: "#/components/schemas/WeatherCurrent" }
+        fromCache: { type: boolean }
+        fetchedAt: { $ref: "#/components/schemas/Timestamp" }
+    WeatherForecastResponse:
+      type: object
+      required: [success, type, data, fromCache, fetchedAt]
+      properties:
+        success: { type: boolean }
+        type: { type: string, enum: [forecast] }
+        data:
+          type: object
+          description: OpenWeatherMap の 5 day / 3 hour forecast の応答をそのまま入れる
+          x-go-type: json.RawMessage
+          x-go-type-import: { path: encoding/json }
+        fromCache: { type: boolean }
+        fetchedAt: { $ref: "#/components/schemas/Timestamp" }
+    WeatherCurrent:
+      description: Next の FormattedWeatherData（src/lib/openWeatherService.ts）と同じ形
+      type: object
+      required:
+        - coordinates
+        - cityName
+        - country
+        - temperature
+        - feelsLike
+        - tempMin
+        - tempMax
+        - humidity
+        - pressure
+        - windSpeed
+        - windDeg
+        - cloudiness
+        - visibility
+        - weather
+        - sunrise
+        - sunset
+        - dataTime
+        - timezone
+      properties:
+        coordinates: { $ref: "#/components/schemas/Coordinates" }
+        cityName: { type: string }
+        country: { type: string }
+        temperature: { type: number, format: double }
+        feelsLike: { type: number, format: double }
+        tempMin: { type: number, format: double }
+        tempMax: { type: number, format: double }
+        humidity: { type: integer }
+        pressure: { type: number, format: double }
+        windSpeed: { type: number, format: double }
+        windDeg: { type: integer }
+        windGust: { type: number, format: double, description: 上流に無ければキーごと出さない }
+        cloudiness: { type: integer }
+        visibility: { type: integer }
+        weather: { $ref: "#/components/schemas/WeatherCondition" }
+        rain: { type: number, format: double, description: 直近1時間の雨量（mm）。上流に無ければキーごと出さない }
+        snow: { type: number, format: double, description: 直近1時間の雪量（mm）。上流に無ければキーごと出さない }
+        sunrise: { $ref: "#/components/schemas/Timestamp" }
+        sunset: { $ref: "#/components/schemas/Timestamp" }
+        dataTime: { $ref: "#/components/schemas/Timestamp" }
+        timezone: { type: integer, description: UTC からのずれ（秒） }
+    Coordinates:
+      type: object
+      required: [lat, lon]
+      properties:
+        lat: { type: number, format: double }
+        lon: { type: number, format: double }
+    WeatherCondition:
+      type: object
+      required: [id, main, description, icon]
+      properties:
+        id: { type: integer }
+        main: { type: string }
+        description: { type: string }
+        icon: { type: string }
+    TideResponse:
+      type: object
+      required: [status, data, meta]
+      properties:
+        status: { type: integer, enum: [200] }
+        data: { $ref: "#/components/schemas/TideData" }
+        meta: { $ref: "#/components/schemas/CacheMeta" }
+    CacheMeta:
+      type: object
+      required: [fromCache, fetchedAt]
+      properties:
+        fromCache: { type: boolean }
+        fetchedAt: { $ref: "#/components/schemas/Timestamp" }
+    TideData:
+      description: Next の FormattedTideData（src/lib/tideService.ts）と同じ形
+      type: object
+      required: [port, tides, dataTime]
+      properties:
+        port: { $ref: "#/components/schemas/TidePort" }
+        tides:
+          type: array
+          items: { $ref: "#/components/schemas/TideDay" }
+        dataTime: { $ref: "#/components/schemas/Timestamp" }
+    TidePort:
+      type: object
+      required: [prefecture_code, port_code, port_name]
+      properties:
+        prefecture_code: { type: string }
+        port_code: { type: string }
+        port_name: { type: string }
+    TideDay:
+      type: object
+      required: [date, daily]
+      properties:
+        date: { type: string, format: date, x-go-type: string }
+        daily: { $ref: "#/components/schemas/TideDaily" }
+    TideDaily:
+      type: object
+      required: [sun, moon, tide, flood, edd]
+      properties:
+        sun: { $ref: "#/components/schemas/TideSun" }
+        moon: { $ref: "#/components/schemas/TideMoon" }
+        tide:
+          type: array
+          items: { $ref: "#/components/schemas/TideEvent" }
+        flood:
+          type: array
+          description: 満潮
+          items: { $ref: "#/components/schemas/TideEvent" }
+        edd:
+          type: array
+          description: 干潮。キーの綴りは上流（tide736.net）と Next に合わせる
+          items: { $ref: "#/components/schemas/TideEvent" }
+    TideSun:
+      type: object
+      required: [astro_twilight, regular_twilight, rise, midline, set]
+      properties:
+        astro_twilight: { type: array, items: { type: string } }
+        regular_twilight: { type: array, items: { type: string } }
+        rise: { type: string }
+        midline: { type: string }
+        set: { type: string }
+    TideMoon:
+      type: object
+      required: [brightness, age, title, rise, midline, set, name]
+      properties:
+        brightness: { type: string }
+        age: { type: string }
+        title: { type: string }
+        rise: { type: string }
+        midline: { type: string }
+        set: { type: string }
+        name: { type: string, nullable: true }
+    TideEvent:
+      type: object
+      required: [time, unix, cm]
+      properties:
+        time: { type: string }
+        unix: { type: integer, format: int64, description: ミリ秒 }
+        cm: { type: number, format: double }
