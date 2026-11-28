@@ -146,6 +146,7 @@ github.com/redis/go-redis/v9 v9.24.0 h1:X1AnQHWaSfMeggDQm7UFad1YwJmoZxVm5XkaP0kr
 github.com/redis/go-redis/v9 v9.24.0/go.mod h1:ted97kpLnB4S2KJkTkw+7GzRjgkFnU909IIrksu+ut4=
 github.com/resend/resend-go/v2 v2.28.0 h1:ttM1/VZR4fApBv3xI1TneSKi1pbfFsVrq7fXFlHKtj4=
 github.com/resend/resend-go/v2 v2.28.0/go.mod h1:3YCb8c8+pLiqhtRFXTyFwlLvfjQtluxOr9HEh2BwCkQ=
+github.com/resend/resend-go/v4 v4.15.0/go.mod h1:96jCV9Fb2HoQAnPOgGXURcbBZxCtLrul8e5iwKJ/E/g=
 github.com/shirou/gopsutil/v4 v4.26.3 h1:2ESdQt90yU3oXF/CdOlRCJxrP+Am1aBYubTMTfxJ1qc=
 github.com/shirou/gopsutil/v4 v4.26.3/go.mod h1:LZ6ewCSkBqUpvSOf+LsTGnRinC6iaNUNMGBtDkJBaLQ=
 github.com/sirupsen/logrus v1.9.4 h1:TsZE7l11zFCLZnZ+teH4Umoq5BhEIfIzfRDZ1Uzql2w=

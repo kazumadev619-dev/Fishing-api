@@ -9,6 +9,7 @@ require (
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/redis/go-redis/v9 v9.24.0
 	github.com/resend/resend-go/v2 v2.28.0
+	github.com/resend/resend-go/v4 v4.15.0
 	github.com/sqlc-dev/pqtype v0.3.0
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.42.0
