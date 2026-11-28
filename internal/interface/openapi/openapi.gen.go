@@ -510,6 +510,7 @@ type MiddlewareFunc func(c *gin.Context)
 
 // GetTide operation middleware
 func (siw *ServerInterfaceWrapper) GetTide(c *gin.Context) {
+
 	var err error
 	_ = err
 
@@ -560,6 +561,7 @@ func (siw *ServerInterfaceWrapper) GetTide(c *gin.Context) {
 
 // GetWeather operation middleware
 func (siw *ServerInterfaceWrapper) GetWeather(c *gin.Context) {
+
 	var err error
 	_ = err
 
@@ -661,6 +663,7 @@ type GetTide200JSONResponse struct {
 }
 
 func (response GetTide200JSONResponse) VisitGetTideResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response.Body); err != nil {
 		return err
@@ -681,6 +684,7 @@ func (response GetTide200JSONResponse) VisitGetTideResponse(w http.ResponseWrite
 type GetTide400JSONResponse struct{ ErrorJSONResponse }
 
 func (response GetTide400JSONResponse) VisitGetTideResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response.ErrorJSONResponse); err != nil {
 		return err
@@ -694,6 +698,7 @@ func (response GetTide400JSONResponse) VisitGetTideResponse(w http.ResponseWrite
 type GetTide500JSONResponse ErrorResponse
 
 func (response GetTide500JSONResponse) VisitGetTideResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
 		return err
@@ -707,6 +712,7 @@ func (response GetTide500JSONResponse) VisitGetTideResponse(w http.ResponseWrite
 type GetTide502JSONResponse ErrorResponse
 
 func (response GetTide502JSONResponse) VisitGetTideResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
 		return err
@@ -720,6 +726,7 @@ func (response GetTide502JSONResponse) VisitGetTideResponse(w http.ResponseWrite
 type GetTide503JSONResponse ErrorResponse
 
 func (response GetTide503JSONResponse) VisitGetTideResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
 		return err
@@ -733,6 +740,7 @@ func (response GetTide503JSONResponse) VisitGetTideResponse(w http.ResponseWrite
 type GetTide504JSONResponse ErrorResponse
 
 func (response GetTide504JSONResponse) VisitGetTideResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
 		return err
@@ -762,6 +770,7 @@ func (t *GetWeather200JSONResponse) UnmarshalJSON(b []byte) error {
 }
 
 func (response GetWeather200JSONResponse) VisitGetWeatherResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
 		return err
@@ -775,6 +784,7 @@ func (response GetWeather200JSONResponse) VisitGetWeatherResponse(w http.Respons
 type GetWeather400JSONResponse struct{ WeatherErrorJSONResponse }
 
 func (response GetWeather400JSONResponse) VisitGetWeatherResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response.WeatherErrorJSONResponse); err != nil {
 		return err
@@ -788,6 +798,7 @@ func (response GetWeather400JSONResponse) VisitGetWeatherResponse(w http.Respons
 type GetWeather500JSONResponse ErrorResponse
 
 func (response GetWeather500JSONResponse) VisitGetWeatherResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
 		return err
@@ -801,6 +812,7 @@ func (response GetWeather500JSONResponse) VisitGetWeatherResponse(w http.Respons
 type GetWeather502JSONResponse ErrorResponse
 
 func (response GetWeather502JSONResponse) VisitGetWeatherResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
 		return err
@@ -814,6 +826,7 @@ func (response GetWeather502JSONResponse) VisitGetWeatherResponse(w http.Respons
 type GetWeather503JSONResponse ErrorResponse
 
 func (response GetWeather503JSONResponse) VisitGetWeatherResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
 		return err
@@ -827,6 +840,7 @@ func (response GetWeather503JSONResponse) VisitGetWeatherResponse(w http.Respons
 type GetWeather504JSONResponse ErrorResponse
 
 func (response GetWeather504JSONResponse) VisitGetWeatherResponse(w http.ResponseWriter) error {
+
 	var buf bytes.Buffer
 	if err := runtime.JSONMarshalWrite(&buf, response); err != nil {
 		return err
@@ -850,10 +864,8 @@ type StrictServerInterface interface {
 // StrictHandlerFunc and StrictMiddlewareFunc are type aliases rather than
 // distinct named types, so middleware written against one generated package
 // can be shared with every other generated package using the same framework.
-type (
-	StrictHandlerFunc    = func(ctx *gin.Context, request any) (any, error)
-	StrictMiddlewareFunc = func(f StrictHandlerFunc, operationID string) StrictHandlerFunc
-)
+type StrictHandlerFunc = func(ctx *gin.Context, request any) (any, error)
+type StrictMiddlewareFunc = func(f StrictHandlerFunc, operationID string) StrictHandlerFunc
 
 type StrictGinServerOptions struct {
 	// RequestErrorHandlerFunc is called when a request cannot be parsed or
