@@ -34,6 +34,8 @@ linters:
       # 生成コードは除外（パスベースで全 linter を抑止）
       - path: db/generated/
         text: ".*"
+      - path: internal/interface/openapi/
+        text: ".*"
 
 formatters:
   # gofumpt / goimports は v2 では formatter として分類される

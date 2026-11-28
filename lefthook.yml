@@ -4,6 +4,9 @@ pre-commit:
   commands:
     gofumpt:
       glob: "*.go"
+      exclude:
+        - "db/generated/**"
+        - "internal/interface/openapi/**"
       run: $(go env GOPATH)/bin/gofumpt -w {staged_files}
       stage_fixed: true
 

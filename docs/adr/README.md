@@ -11,6 +11,7 @@ Fishing-api の主要な設計判断を記録した索引なのだ。各 ADR は
 | [0005](0005-clean-architecture-layers.md) | クリーンアーキテクチャ層構成 | 依存は内側のみ `interface → usecase → domain ← infrastructure`。差し替え容易性とテスト容易性を確保 |
 | [0006](0006-incremental-migration-via-nextjs-bff.md) | Next を BFF にして1本ずつ Go に移す | Ingress の一括切替をやめ、Next の Route Handler を1本ずつ Go への中継に置き換える。認証は最後の段まで Auth.js に残し、Next から Go へは署名した短命の内部トークンで user.id を渡す |
 | [0007](0007-schema-ownership-goose.md) | スキーマの正を Go 側に移し、goose で管理する | Phase 4 でスキーマの正を Prisma から Go に移す。goose の SQL をバイナリに埋め込み、db-migrate Job は Go のイメージで流す |
+| [0008](0008-openapi-spec-source-of-truth.md) | OpenAPI の仕様を正にして Go と Next の型を生成する | `api/openapi.yaml`（OpenAPI 3.0.3）を契約の正にし、Go は `oapi-codegen`（strict server）、Next はコミット固定で取得して `openapi-typescript` で型を生成する |
 
 ## ADR の書き方
 

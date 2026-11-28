@@ -47,12 +47,13 @@ domain → usecase → infrastructure / interface
 ```
 
 ```
+api/               OpenAPI 仕様（api/openapi.yaml）・oapi-codegen 設定
 cmd/server/        エントリポイント
 config/            環境変数設定
 domain/            エンティティ・リポジトリIF
 usecase/           ビジネスロジック
 infrastructure/    DB・外部API実装
-interface/         HTTPハンドラー・ミドルウェア
+interface/         HTTPハンドラー・ミドルウェア・OpenAPI生成コード
 pkg/               JWT・バリデーター
 db/                sqlc スキーマ・クエリ
 k8s/               Kubernetes マニフェスト
@@ -108,6 +109,7 @@ make run         # 開発サーバー起動（:8080）
 make test        # 全テスト実行
 make lint        # Lint チェック
 make sqlc-gen    # sqlc コード再生成
+make openapi-gen # OpenAPI 仕様（api/openapi.yaml）から Go コード再生成
 make docker-up   # DB・Redis 起動
 make docker-down # DB・Redis 停止
 make build       # バイナリビルド（./bin/server）
@@ -125,6 +127,7 @@ make build       # バイナリビルド（./bin/server）
 
 ## ドキュメント
 
+- [OpenAPI 仕様（HTTP API 契約の正）](api/openapi.yaml)
 - [設計ドキュメント](docs/superpowers/specs/2026-04-07-go-backend-design.md)
 - [アーキテクチャ決定記録（ADR）](docs/adr/)
 - [開発コントリビューションガイド](CONTRIBUTING.md)

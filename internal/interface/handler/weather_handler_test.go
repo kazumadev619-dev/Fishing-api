@@ -37,7 +37,7 @@ func (m *MockWeatherUsecase) GetForecast(ctx context.Context, lat, lon float64, 
 func serveWeather(m *MockWeatherUsecase, url string) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/api/weather", NewWeatherHandler(m, true).Get)
+	RegisterOpenAPI(r, NewWeatherHandler(m, true), nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, url, nil))
 	return w
@@ -128,7 +128,18 @@ func TestWeatherHandler_Errors(t *testing.T) {
 		wantStatus int
 		wantBody   string
 	}{
-		{"座標が不正", "/api/weather?lat=999&lon=139", nil, 400, ""},
+		{
+			"座標が不正", "/api/weather?lat=999&lon=139", nil, 400,
+			`{"error":"lat must be between -90 and 90","code":"INVALID_PARAMS","status":400}`,
+		},
+		{
+			"lat が数値でない", "/api/weather?lat=abc&lon=139", nil, 400,
+			`{"error":"invalid lat: strconv.ParseFloat: parsing \"abc\": invalid syntax","code":"INVALID_PARAMS","status":400}`,
+		},
+		{
+			"lon が無い", "/api/weather?lat=35", nil, 400,
+			`{"error":"lat and lon are required","code":"INVALID_PARAMS","status":400}`,
+		},
 		{
 			"type が不正", "/api/weather?lat=35&lon=139&type=hourly", nil, 400,
 			`{"error":"typeは \"current\" または \"forecast\" である必要があります","code":"INVALID_PARAMS","status":400}`,
@@ -171,7 +182,7 @@ func TestWeatherHandler_NotConfigured(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	m := &MockWeatherUsecase{}
 	r := gin.New()
-	r.GET("/api/weather", NewWeatherHandler(m, false).Get)
+	RegisterOpenAPI(r, NewWeatherHandler(m, false), nil)
 
 	for _, url := range []string{"/api/weather?lat=35&lon=139", "/api/weather?lat=999&type=bogus"} {
 		w := httptest.NewRecorder()

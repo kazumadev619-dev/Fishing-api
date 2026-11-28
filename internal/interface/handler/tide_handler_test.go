@@ -29,7 +29,7 @@ func (m *MockTideUsecase) GetTideData(ctx context.Context, prefCode, portCode, d
 func serveTide(m *MockTideUsecase, url string) *httptest.ResponseRecorder {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/api/conditions/tide", NewTideHandler(m).Get)
+	RegisterOpenAPI(r, nil, NewTideHandler(m))
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequestWithContext(context.Background(), http.MethodGet, url, nil))
 	return w
