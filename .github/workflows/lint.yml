@@ -31,7 +31,7 @@ jobs:
           cache: true
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           # ローカル（make lint）と同じバージョンに固定して再現性を担保
           version: v2.15.0
